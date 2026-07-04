@@ -1,0 +1,3 @@
+# Benchtop / station app - variant-specific configuration.
+CONFIG_FF_BOARD_DESKTOP=y
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
