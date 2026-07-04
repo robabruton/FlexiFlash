@@ -1,19 +1,20 @@
 # Firmware
 
-The firmware is an ESP-IDF scaffold with two application variants sharing a
-board-profile component.
+The firmware is an ESP-IDF scaffold with two application variants sharing
+common status/result primitives and a board-profile component.
 
 | Path | Role |
 | --- | --- |
 | `apps/handheld/` | ESP-IDF project for the handheld variant |
 | `apps/desktop/` | ESP-IDF project for the benchtop station variant |
+| `components/common/` | Shared status and result primitives |
 | `components/board/` | Active board identity and capability contract |
 | `sdkconfig.defaults.common` | Configuration shared by both apps |
 
 Each app has its own `main/`, partition table, and `sdkconfig.defaults`. Both
-apps reference `firmware/components/` through `EXTRA_COMPONENT_DIRS`; at this
-stage, the shared component tree contains the `board` component used by both
-apps.
+apps reference `firmware/components/` through `EXTRA_COMPONENT_DIRS`; the
+shared component tree contains common firmware primitives and the `board`
+component used by both apps.
 
 ## Building
 
