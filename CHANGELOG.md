@@ -9,5 +9,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Add a buildable ESP-IDF firmware foundation with handheld and desktop app
-  variants sharing common status/result primitives and a board-profile
-  component.
+  variants sharing common status/result primitives, product-wide build limits,
+  and a board-profile component.
