@@ -7,3 +7,7 @@ Thumbs.db
 # Editor swap/backup files
 *.swp
 *~
+
+# ESP-IDF local build output
+firmware/apps/*/build/
+firmware/apps/*/sdkconfig

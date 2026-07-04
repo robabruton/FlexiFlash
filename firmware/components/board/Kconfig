@@ -1,0 +1,19 @@
+menu "FlexiFlash board profile"
+
+    choice FF_BOARD_PROFILE
+        prompt "Active board profile"
+        default FF_BOARD_HANDHELD
+        help
+            Selects the compile-time board profile. Each profile is the sole
+            owner of its pin map and capability flags. The two profiles are the
+            shipped product form factors and share ESP32-WROOM-32E-N16 silicon.
+            Each app project defaults this to its own variant.
+
+        config FF_BOARD_HANDHELD
+            bool "Handheld (pen) form factor"
+
+        config FF_BOARD_DESKTOP
+            bool "Benchtop / station form factor"
+    endchoice
+
+endmenu

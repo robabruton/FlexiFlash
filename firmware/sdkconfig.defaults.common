@@ -1,0 +1,10 @@
+# Configuration shared by both app projects.
+#
+# Each app references this file plus its own sdkconfig.defaults through
+# SDKCONFIG_DEFAULTS (set in the app's top-level CMakeLists.txt). Variant-
+# specific values (board profile, flash size) live in the app's own file.
+CONFIG_IDF_TARGET="esp32"
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+CONFIG_COMPILER_WARN_WRITE_STRINGS=y
