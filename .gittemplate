@@ -1,0 +1,14 @@
+
+# <type>(<scope>): <description>
+#
+# type: feat, fix, refactor, perf, docs, style, test, build, ci, chore, revert
+# scope: optional noun for the affected area
+# description: imperative, lowercase, no period, 50 characters or fewer
+#
+# Body, when needed:
+# - Explain what changed and why.
+# - Wrap at 72 characters.
+#
+# Footer examples:
+# BREAKING CHANGE: describe the impact
+# Fixes #123
