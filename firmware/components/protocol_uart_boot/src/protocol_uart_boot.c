@@ -290,3 +290,35 @@ ff_status_t ff_uart_boot_response_status(
     *error = response->payload[data_bytes + 1U];
     return FF_STATUS_OK;
 }
+
+ff_status_t ff_uart_boot_validate_sync_response(
+    const ff_uart_boot_response_t *response,
+    uint32_t *value)
+{
+    if (response == NULL) {
+        return FF_STATUS_INVALID_ARGUMENT;
+    }
+
+    if (response->command != FF_UART_BOOT_COMMAND_SYNC) {
+        return FF_STATUS_CHECK_FAILED;
+    }
+
+    uint8_t status = 0U;
+    uint8_t error = 0U;
+    ff_status_t result =
+        ff_uart_boot_response_status(response, 0U, &status, &error);
+    if (result != FF_STATUS_OK) {
+        return result;
+    }
+
+    if (status != FF_UART_BOOT_STATUS_SUCCESS ||
+        error != FF_UART_BOOT_STATUS_SUCCESS) {
+        return FF_STATUS_CHECK_FAILED;
+    }
+
+    if (value != NULL) {
+        *value = response->value;
+    }
+
+    return FF_STATUS_OK;
+}
