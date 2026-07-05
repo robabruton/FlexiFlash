@@ -10,6 +10,57 @@
 
 static int s_failures;
 
+typedef struct {
+    uint8_t written[FF_UART_BOOT_SYNC_PACKET_BYTES];
+    size_t written_bytes;
+    size_t write_capacity;
+    ff_status_t write_status;
+    const uint8_t *read;
+    size_t read_bytes;
+    size_t read_index;
+    ff_status_t read_status;
+} fake_transport_t;
+
+static ff_status_t fake_transport_write(void *context,
+                                        const uint8_t *data,
+                                        size_t data_bytes)
+{
+    fake_transport_t *transport = (fake_transport_t *)context;
+
+    if (transport->write_status != FF_STATUS_OK) {
+        return transport->write_status;
+    }
+
+    if (data_bytes > transport->write_capacity) {
+        return FF_STATUS_NO_MEMORY;
+    }
+
+    memcpy(transport->written, data, data_bytes);
+    transport->written_bytes = data_bytes;
+    return FF_STATUS_OK;
+}
+
+static ff_status_t fake_transport_read_byte(void *context,
+                                            uint8_t *byte,
+                                            bool *byte_ready)
+{
+    fake_transport_t *transport = (fake_transport_t *)context;
+
+    if (transport->read_status != FF_STATUS_OK) {
+        return transport->read_status;
+    }
+
+    if (transport->read_index >= transport->read_bytes) {
+        *byte_ready = false;
+        return FF_STATUS_OK;
+    }
+
+    *byte = transport->read[transport->read_index];
+    ++transport->read_index;
+    *byte_ready = true;
+    return FF_STATUS_OK;
+}
+
 static void expect_true(int condition, const char *message)
 {
     if (!condition) {
@@ -915,6 +966,253 @@ static void test_sync_exchange_errors(void)
                 "sync exchange resets reader after invalid response");
 }
 
+static void test_transport_send_sync(void)
+{
+    uint8_t expected[FF_UART_BOOT_SYNC_PACKET_BYTES] = {0};
+    size_t expected_bytes = 0U;
+    uint8_t scratch[FF_UART_BOOT_SYNC_PACKET_BYTES] = {0};
+    size_t packet_bytes = 0U;
+    fake_transport_t transport = {
+        .write_capacity = sizeof(transport.written),
+        .write_status = FF_STATUS_OK,
+        .read_status = FF_STATUS_OK,
+    };
+    const ff_uart_boot_transport_port_t port = {
+        .context = &transport,
+        .write = fake_transport_write,
+        .read_byte = fake_transport_read_byte,
+    };
+
+    expect_status(
+        ff_uart_boot_build_sync_packet(expected,
+                                       sizeof(expected),
+                                       &expected_bytes),
+        FF_STATUS_OK,
+        "transport sync fixture builds packet");
+    expect_status(
+        ff_uart_boot_transport_send_sync(&port,
+                                         scratch,
+                                         sizeof(scratch),
+                                         &packet_bytes),
+        FF_STATUS_OK,
+        "transport writes sync packet");
+    expect_true(packet_bytes == expected_bytes,
+                "transport send reports packet bytes");
+    expect_true(transport.written_bytes == expected_bytes,
+                "transport writes expected byte count");
+    expect_true(memcmp(transport.written, expected, expected_bytes) == 0,
+                "transport writes encoded sync packet");
+
+    expect_status(
+        ff_uart_boot_transport_send_sync(&port,
+                                         scratch,
+                                         sizeof(scratch),
+                                         NULL),
+        FF_STATUS_OK,
+        "transport accepts ignored packet byte count");
+
+    uint8_t small_scratch[FF_UART_BOOT_SYNC_PACKET_BYTES - 1U] = {0};
+    packet_bytes = 0xFFFFU;
+    expect_status(
+        ff_uart_boot_transport_send_sync(&port,
+                                         small_scratch,
+                                         sizeof(small_scratch),
+                                         &packet_bytes),
+        FF_STATUS_NO_MEMORY,
+        "transport send reports small scratch buffer");
+    expect_true(packet_bytes == 0U,
+                "transport send clears byte count on build failure");
+
+    fake_transport_t failing_transport = {
+        .write_capacity = sizeof(failing_transport.written),
+        .write_status = FF_STATUS_IO_ERROR,
+        .read_status = FF_STATUS_OK,
+    };
+    const ff_uart_boot_transport_port_t failing_port = {
+        .context = &failing_transport,
+        .write = fake_transport_write,
+        .read_byte = fake_transport_read_byte,
+    };
+    expect_status(
+        ff_uart_boot_transport_send_sync(&failing_port,
+                                         scratch,
+                                         sizeof(scratch),
+                                         &packet_bytes),
+        FF_STATUS_IO_ERROR,
+        "transport send reports write failure");
+
+    const ff_uart_boot_transport_port_t missing_write = {
+        .context = &transport,
+        .read_byte = fake_transport_read_byte,
+    };
+    expect_status(
+        ff_uart_boot_transport_send_sync(NULL,
+                                         scratch,
+                                         sizeof(scratch),
+                                         &packet_bytes),
+        FF_STATUS_INVALID_ARGUMENT,
+        "transport send rejects missing port");
+    expect_status(
+        ff_uart_boot_transport_send_sync(&missing_write,
+                                         scratch,
+                                         sizeof(scratch),
+                                         &packet_bytes),
+        FF_STATUS_INVALID_ARGUMENT,
+        "transport send rejects missing write callback");
+    expect_status(
+        ff_uart_boot_transport_send_sync(&port,
+                                         NULL,
+                                         sizeof(scratch),
+                                         &packet_bytes),
+        FF_STATUS_INVALID_ARGUMENT,
+        "transport send rejects missing scratch");
+}
+
+static void test_transport_read_sync_response(void)
+{
+    const uint8_t raw_response[] = {
+        FF_UART_BOOT_FRAME_DIRECTION_RESPONSE,
+        FF_UART_BOOT_COMMAND_SYNC,
+        0x02U,
+        0x00U,
+        0x78U,
+        0x56U,
+        0x34U,
+        0x12U,
+        FF_UART_BOOT_STATUS_SUCCESS,
+        FF_UART_BOOT_STATUS_SUCCESS,
+    };
+    uint8_t encoded[32] = {0};
+    size_t encoded_bytes = 0U;
+    uint8_t frame[sizeof(raw_response)] = {0};
+    ff_uart_boot_response_reader_t reader = {0};
+    bool sync_ready = false;
+    uint32_t value = 0U;
+
+    expect_status(
+        ff_uart_boot_slip_encode(raw_response,
+                                 sizeof(raw_response),
+                                 encoded,
+                                 sizeof(encoded),
+                                 &encoded_bytes),
+        FF_STATUS_OK,
+        "transport read fixture encodes sync response");
+
+    fake_transport_t transport = {
+        .write_capacity = sizeof(transport.written),
+        .write_status = FF_STATUS_OK,
+        .read = encoded,
+        .read_bytes = encoded_bytes,
+        .read_status = FF_STATUS_OK,
+    };
+    const ff_uart_boot_transport_port_t port = {
+        .context = &transport,
+        .write = fake_transport_write,
+        .read_byte = fake_transport_read_byte,
+    };
+
+    expect_status(
+        ff_uart_boot_response_reader_init(&reader, frame, sizeof(frame)),
+        FF_STATUS_OK,
+        "transport read initializes response reader");
+
+    for (size_t i = 0U; i + 1U < encoded_bytes; ++i) {
+        expect_status(
+            ff_uart_boot_transport_read_sync_response(&port,
+                                                      &reader,
+                                                      &sync_ready,
+                                                      &value),
+            FF_STATUS_OK,
+            "transport read accepts partial sync response");
+        expect_true(!sync_ready,
+                    "transport read waits for completed sync response");
+    }
+
+    expect_status(
+        ff_uart_boot_transport_read_sync_response(&port,
+                                                  &reader,
+                                                  &sync_ready,
+                                                  &value),
+        FF_STATUS_OK,
+        "transport read accepts completed sync response");
+    expect_true(sync_ready, "transport read reports sync response ready");
+    expect_true(value == 0x12345678U,
+                "transport read returns sync response value");
+
+    sync_ready = true;
+    expect_status(
+        ff_uart_boot_transport_read_sync_response(&port,
+                                                  &reader,
+                                                  &sync_ready,
+                                                  &value),
+        FF_STATUS_OK,
+        "transport read accepts no-byte poll");
+    expect_true(!sync_ready, "transport read clears ready flag without byte");
+}
+
+static void test_transport_read_errors(void)
+{
+    uint8_t frame[16] = {0};
+    ff_uart_boot_response_reader_t reader = {0};
+    bool sync_ready = false;
+    uint32_t value = 0U;
+    fake_transport_t transport = {
+        .write_capacity = sizeof(transport.written),
+        .write_status = FF_STATUS_OK,
+        .read_status = FF_STATUS_IO_ERROR,
+    };
+    const ff_uart_boot_transport_port_t port = {
+        .context = &transport,
+        .write = fake_transport_write,
+        .read_byte = fake_transport_read_byte,
+    };
+
+    expect_status(
+        ff_uart_boot_response_reader_init(&reader, frame, sizeof(frame)),
+        FF_STATUS_OK,
+        "transport error test initializes reader");
+    expect_status(
+        ff_uart_boot_transport_read_sync_response(&port,
+                                                  &reader,
+                                                  &sync_ready,
+                                                  &value),
+        FF_STATUS_IO_ERROR,
+        "transport read reports callback failure");
+
+    const ff_uart_boot_transport_port_t missing_read = {
+        .context = &transport,
+        .write = fake_transport_write,
+    };
+    expect_status(
+        ff_uart_boot_transport_read_sync_response(NULL,
+                                                  &reader,
+                                                  &sync_ready,
+                                                  &value),
+        FF_STATUS_INVALID_ARGUMENT,
+        "transport read rejects missing port");
+    expect_status(
+        ff_uart_boot_transport_read_sync_response(&missing_read,
+                                                  &reader,
+                                                  &sync_ready,
+                                                  &value),
+        FF_STATUS_INVALID_ARGUMENT,
+        "transport read rejects missing read callback");
+    expect_status(
+        ff_uart_boot_transport_read_sync_response(&port,
+                                                  NULL,
+                                                  &sync_ready,
+                                                  &value),
+        FF_STATUS_INVALID_ARGUMENT,
+        "transport read rejects missing reader");
+    expect_status(
+        ff_uart_boot_transport_read_sync_response(&port,
+                                                  &reader,
+                                                  NULL,
+                                                  &value),
+        FF_STATUS_INVALID_ARGUMENT,
+        "transport read rejects missing ready output");
+}
+
 static void test_parse_response(void)
 {
     const uint8_t frame[] = {
@@ -1149,6 +1447,9 @@ int main(void)
     test_build_sync_packet();
     test_sync_exchange_response();
     test_sync_exchange_errors();
+    test_transport_send_sync();
+    test_transport_read_sync_response();
+    test_transport_read_errors();
     test_parse_response();
     test_response_status();
     test_validate_sync_response();

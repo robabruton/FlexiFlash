@@ -88,6 +88,43 @@ typedef struct {
 } ff_uart_boot_response_reader_t;
 
 /**
+ * @brief Writes encoded UART bootloader packet bytes to a transport.
+ *
+ * @param[in,out] context Caller-owned transport context.
+ * @param[in] data Packet bytes to write.
+ * @param[in] data_bytes Number of packet bytes.
+ *
+ * @return FF_STATUS_OK when all bytes are accepted; otherwise a status
+ *         describing the failed transport operation.
+ */
+typedef ff_status_t (*ff_uart_boot_transport_write_fn)(void *context,
+                                                       const uint8_t *data,
+                                                       size_t data_bytes);
+
+/**
+ * @brief Reads one encoded UART bootloader byte from a transport.
+ *
+ * @param[in,out] context Caller-owned transport context.
+ * @param[out] byte Receives the byte when one is available.
+ * @param[out] byte_ready Receives true when a byte was read.
+ *
+ * @return FF_STATUS_OK when the read attempt succeeds; otherwise a status
+ *         describing the failed transport operation.
+ */
+typedef ff_status_t (*ff_uart_boot_transport_read_byte_fn)(void *context,
+                                                           uint8_t *byte,
+                                                           bool *byte_ready);
+
+/**
+ * @brief Transport callbacks used by protocol-level command helpers.
+ */
+typedef struct {
+    void *context; /**< Caller-owned transport context. */
+    ff_uart_boot_transport_write_fn write; /**< Writes encoded packet bytes. */
+    ff_uart_boot_transport_read_byte_fn read_byte; /**< Reads one byte. */
+} ff_uart_boot_transport_port_t;
+
+/**
  * @brief Calculates the bootloader checksum for command payload bytes.
  *
  * @param[in] payload Payload bytes to checksum, or NULL for an empty payload.
@@ -290,6 +327,40 @@ ff_status_t ff_uart_boot_build_sync_packet(uint8_t *output,
 ff_status_t ff_uart_boot_sync_exchange_push(
     ff_uart_boot_response_reader_t *reader,
     uint8_t byte,
+    bool *sync_ready,
+    uint32_t *value);
+
+/**
+ * @brief Writes one complete encoded SYNC packet to a transport port.
+ *
+ * @param[in] port Transport port used for packet output.
+ * @param[out] scratch Scratch buffer for the encoded packet.
+ * @param[in] scratch_capacity Scratch buffer capacity in bytes.
+ * @param[out] packet_bytes Receives the encoded packet size, or NULL.
+ *
+ * @return FF_STATUS_OK when the packet is built and written; otherwise a
+ *         validation, buffer-capacity, or transport status.
+ */
+ff_status_t ff_uart_boot_transport_send_sync(
+    const ff_uart_boot_transport_port_t *port,
+    uint8_t *scratch,
+    size_t scratch_capacity,
+    size_t *packet_bytes);
+
+/**
+ * @brief Reads one available byte and advances a SYNC response exchange.
+ *
+ * @param[in] port Transport port used for response input.
+ * @param[in,out] reader Reader receiving encoded response bytes.
+ * @param[out] sync_ready Receives true when a valid SYNC response completes.
+ * @param[out] value Receives the response value, or NULL to ignore it.
+ *
+ * @return FF_STATUS_OK when the read attempt succeeds; otherwise a validation,
+ *         transport, or response status.
+ */
+ff_status_t ff_uart_boot_transport_read_sync_response(
+    const ff_uart_boot_transport_port_t *port,
+    ff_uart_boot_response_reader_t *reader,
     bool *sync_ready,
     uint32_t *value);
 
