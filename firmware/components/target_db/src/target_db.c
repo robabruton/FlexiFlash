@@ -180,7 +180,8 @@ const char *ff_target_protocol_name(ff_target_protocol_t protocol)
     }
 }
 
-ff_status_t ff_target_descriptor_validate(const ff_target_descriptor_t *descriptor)
+ff_status_t ff_target_descriptor_validate(
+    const ff_target_descriptor_t *descriptor)
 {
     if (descriptor == NULL) {
         return FF_STATUS_INVALID_ARGUMENT;

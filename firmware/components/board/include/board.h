@@ -28,10 +28,11 @@ typedef enum {
  * and absent on another without forking the firmware.
  */
 typedef struct {
-    bool has_battery;        /**< LiPo + fuel gauge present. */
-    bool has_rgb_led;        /**< Controllable multicolor status LED present. */
-    bool has_current_sense;  /**< Target current measurement channel present. */
-    bool has_production_io;  /**< External trigger and pass/fail outputs present. */
+    bool has_battery;       /**< LiPo + fuel gauge present. */
+    bool has_rgb_led;       /**< Controllable multicolor status LED present. */
+    bool has_current_sense; /**< Target current measurement channel present. */
+    /** External trigger and pass/fail outputs present. */
+    bool has_production_io;
 } ff_board_caps_t;
 
 /**
@@ -40,9 +41,9 @@ typedef struct {
  * Populated by exactly one profile source selected at compile time.
  */
 typedef struct {
-    const char       *name;         /**< Human-readable board name. */
-    ff_form_factor_t  form_factor;  /**< Form factor this board presents. */
-    ff_board_caps_t   caps;         /**< Physical capability flags. */
+    const char *name;             /**< Human-readable board name. */
+    ff_form_factor_t form_factor; /**< Form factor this board presents. */
+    ff_board_caps_t caps;         /**< Physical capability flags. */
 } ff_board_t;
 
 /**

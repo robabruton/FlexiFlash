@@ -23,12 +23,13 @@ typedef uint32_t ff_target_quirks_t;
 
 /** Broad device family a target descriptor represents. */
 typedef enum {
-    FF_TARGET_FAMILY_ESP32 = 0,  /**< ESP32 target devices. */
+    FF_TARGET_FAMILY_ESP32 = 0, /**< ESP32 target devices. */
 } ff_target_family_t;
 
 /** Programming protocol family used to communicate with a target. */
 typedef enum {
-    FF_TARGET_PROTOCOL_ESP_UART_BOOT = 0,  /**< ESP UART ROM bootloader protocol. */
+    /** ESP UART ROM bootloader protocol. */
+    FF_TARGET_PROTOCOL_ESP_UART_BOOT = 0,
 } ff_target_protocol_t;
 
 /** Target identification mechanism used during descriptor matching. */
@@ -40,19 +41,19 @@ typedef enum {
  * @brief Target identification values used to match a connected device.
  */
 typedef struct {
-    ff_target_match_kind_t kind;   /**< Matching mechanism. */
-    uint32_t               value;  /**< Numeric chip identifier. */
+    ff_target_match_kind_t kind; /**< Matching mechanism. */
+    uint32_t value;              /**< Numeric chip identifier. */
 } ff_target_match_t;
 
 /**
  * @brief Flash memory geometry used by protocol implementations.
  */
 typedef struct {
-    uint32_t base_address;       /**< First programmable flash address. */
-    uint32_t size_bytes;         /**< Total programmable flash size. */
-    uint32_t erase_block_bytes;  /**< Smallest erasable flash block. */
-    uint32_t write_block_bytes;  /**< Smallest writable flash block. */
-    uint8_t  erased_byte;        /**< Value read from erased flash. */
+    uint32_t base_address;      /**< First programmable flash address. */
+    uint32_t size_bytes;        /**< Total programmable flash size. */
+    uint32_t erase_block_bytes; /**< Smallest erasable flash block. */
+    uint32_t write_block_bytes; /**< Smallest writable flash block. */
+    uint8_t erased_byte;        /**< Value read from erased flash. */
 } ff_target_flash_t;
 
 /**
@@ -77,15 +78,15 @@ typedef struct {
  * @brief Static facts required to program one supported target.
  */
 typedef struct {
-    const char             *id;        /**< Stable lowercase descriptor ID. */
-    const char             *name;      /**< Human-readable target name. */
-    ff_target_family_t      family;    /**< Broad device family. */
-    ff_target_protocol_t    protocol;  /**< Programming protocol. */
-    ff_target_match_t       match;     /**< Device identification rule. */
-    ff_target_flash_t       flash;     /**< Main flash geometry. */
-    ff_target_voltage_t     voltage;   /**< Supported target voltage range. */
-    ff_target_rate_limits_t rates;     /**< Safe connection and programming rates. */
-    ff_target_quirks_t      quirks;    /**< Target-specific behavior flags. */
+    const char *id;                  /**< Stable lowercase descriptor ID. */
+    const char *name;                /**< Human-readable target name. */
+    ff_target_family_t family;       /**< Broad device family. */
+    ff_target_protocol_t protocol;   /**< Programming protocol. */
+    ff_target_match_t match;         /**< Device identification rule. */
+    ff_target_flash_t flash;         /**< Main flash geometry. */
+    ff_target_voltage_t voltage;     /**< Supported voltage range. */
+    ff_target_rate_limits_t rates;   /**< Safe programming rates. */
+    ff_target_quirks_t quirks;       /**< Target-specific behavior flags. */
 } ff_target_descriptor_t;
 
 /**
@@ -132,15 +133,16 @@ const char *ff_target_protocol_name(ff_target_protocol_t protocol);
  * @return FF_STATUS_OK when the descriptor is coherent; otherwise a status
  *         describing the failed validation class.
  */
-ff_status_t ff_target_descriptor_validate(const ff_target_descriptor_t *descriptor);
+ff_status_t ff_target_descriptor_validate(
+    const ff_target_descriptor_t *descriptor);
 
 /**
  * @brief Counts compiled-in target descriptors.
  *
  * @param[out] count Receives the number of available descriptors.
  *
- * @return FF_STATUS_OK when the compiled-in descriptor table is valid; otherwise
- *         a status describing the failed validation class.
+ * @return FF_STATUS_OK when the compiled-in descriptor table is valid;
+ *         otherwise a status describing the failed validation class.
  */
 ff_status_t ff_target_descriptor_count(size_t *count);
 
