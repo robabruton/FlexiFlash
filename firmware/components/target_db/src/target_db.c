@@ -1,11 +1,45 @@
 /**
  * @file target_db.c
- * @brief Target descriptor validation helpers.
+ * @brief Target descriptor storage and validation helpers.
  */
 
 #include "target_db.h"
 
 #include <string.h>
+
+static const ff_target_descriptor_t s_target_descriptors[] = {
+    {
+        .id = "esp32-uart-boot",
+        .name = "Espressif ESP32 (UART bootloader)",
+        .family = FF_TARGET_FAMILY_ESP32,
+        .protocol = FF_TARGET_PROTOCOL_ESP_UART_BOOT,
+        .match = {
+            .kind = FF_TARGET_MATCH_ESP_CHIP_ID,
+            .value = 0x00F01D83U,
+        },
+        .flash = {
+            .base_address = 0x00000000U,
+            .size_bytes = 16U * 1024U * 1024U,
+            .erase_block_bytes = 4096U,
+            .write_block_bytes = 16U,
+            .erased_byte = 0xFFU,
+        },
+        .voltage = {
+            .min_mv = 3000U,
+            .max_mv = 3600U,
+        },
+        .rates = {
+            .connect_bit_clock_hz = 0U,
+            .max_bit_clock_hz = 0U,
+            .connect_baud = 115200U,
+            .max_baud = 921600U,
+        },
+        .quirks = 0U,
+    },
+};
+
+static const size_t s_target_descriptor_count =
+    sizeof(s_target_descriptors) / sizeof(s_target_descriptors[0]);
 
 static bool text_field_is_valid(const char *value, size_t max_bytes)
 {
@@ -81,6 +115,20 @@ static bool rate_limits_are_valid(ff_target_protocol_t protocol,
     }
 }
 
+static ff_status_t descriptor_table_validate(void)
+{
+    for (size_t i = 0U; i < s_target_descriptor_count; ++i) {
+        ff_status_t status =
+            ff_target_descriptor_validate(&s_target_descriptors[i]);
+
+        if (status != FF_STATUS_OK) {
+            return status;
+        }
+    }
+
+    return FF_STATUS_OK;
+}
+
 bool ff_target_family_is_valid(ff_target_family_t family)
 {
     switch (family) {
@@ -147,4 +195,66 @@ ff_status_t ff_target_descriptor_validate(const ff_target_descriptor_t *descript
     }
 
     return FF_STATUS_OK;
+}
+
+ff_status_t ff_target_descriptor_count(size_t *count)
+{
+    if (count == NULL) {
+        return FF_STATUS_INVALID_ARGUMENT;
+    }
+
+    ff_status_t status = descriptor_table_validate();
+    if (status != FF_STATUS_OK) {
+        return status;
+    }
+
+    *count = s_target_descriptor_count;
+    return FF_STATUS_OK;
+}
+
+ff_status_t ff_target_descriptor_at(size_t index,
+                                    const ff_target_descriptor_t **descriptor)
+{
+    if (descriptor == NULL) {
+        return FF_STATUS_INVALID_ARGUMENT;
+    }
+
+    *descriptor = NULL;
+
+    ff_status_t status = descriptor_table_validate();
+    if (status != FF_STATUS_OK) {
+        return status;
+    }
+
+    if (index >= s_target_descriptor_count) {
+        return FF_STATUS_NOT_FOUND;
+    }
+
+    *descriptor = &s_target_descriptors[index];
+    return FF_STATUS_OK;
+}
+
+ff_status_t ff_target_descriptor_find_by_id(
+    const char *id,
+    const ff_target_descriptor_t **descriptor)
+{
+    if (id == NULL || descriptor == NULL) {
+        return FF_STATUS_INVALID_ARGUMENT;
+    }
+
+    *descriptor = NULL;
+
+    ff_status_t status = descriptor_table_validate();
+    if (status != FF_STATUS_OK) {
+        return status;
+    }
+
+    for (size_t i = 0U; i < s_target_descriptor_count; ++i) {
+        if (strcmp(s_target_descriptors[i].id, id) == 0) {
+            *descriptor = &s_target_descriptors[i];
+            return FF_STATUS_OK;
+        }
+    }
+
+    return FF_STATUS_NOT_FOUND;
 }
