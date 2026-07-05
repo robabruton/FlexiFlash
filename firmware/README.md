@@ -11,14 +11,15 @@ contracts and lookup helpers, and a board-profile component.
 | `components/common/` | Shared status and result primitives |
 | `components/config/` | Product-wide build limits shared by both app variants |
 | `components/target_db/` | Target descriptor contracts, storage, and lookup helpers |
+| `components/protocol_uart_boot/` | ESP UART bootloader framing helpers |
 | `components/board/` | Active board identity and capability contract |
 | `sdkconfig.defaults.common` | Configuration shared by both apps |
 
 Each app has its own `main/`, partition table, and `sdkconfig.defaults`. Both
 apps reference `firmware/components/` through `EXTRA_COMPONENT_DIRS`; the
 shared component tree contains common firmware primitives, product-wide build
-limits, target descriptor contracts and lookup helpers, and the `board`
-component used by both apps.
+limits, target descriptor contracts and lookup helpers, ESP UART bootloader
+framing helpers, and the `board` component used by both apps.
 
 ## Building
 
@@ -44,3 +45,6 @@ cmake -S firmware/components/target_db/host_test -B firmware/components/target_d
 cmake --build firmware/components/target_db/host_test/build
 ctest --test-dir firmware/components/target_db/host_test/build --output-on-failure
 ```
+
+Use `firmware/components/protocol_uart_boot/host_test` for the ESP UART
+bootloader framing tests.
