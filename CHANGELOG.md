@@ -13,4 +13,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   target descriptor contracts and lookup helpers, and a board-profile
   component, with host-side coverage for the target descriptor table and ESP
   UART bootloader framing, streaming response reading, response parsing, SYNC
-  command construction, and SYNC response validation helpers.
+  command construction, SYNC command exchange, and SYNC response validation
+  helpers.
