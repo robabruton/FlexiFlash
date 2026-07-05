@@ -42,6 +42,13 @@
 /** Bytes in the ROM SYNC command payload. */
 #define FF_UART_BOOT_SYNC_PAYLOAD_BYTES 36U
 
+/** Bytes in the unescaped ROM SYNC command frame. */
+#define FF_UART_BOOT_SYNC_COMMAND_BYTES \
+    (FF_UART_BOOT_COMMAND_HEADER_BYTES + FF_UART_BOOT_SYNC_PAYLOAD_BYTES)
+
+/** Bytes in the encoded ROM SYNC command packet. */
+#define FF_UART_BOOT_SYNC_PACKET_BYTES (FF_UART_BOOT_SYNC_COMMAND_BYTES + 2U)
+
 /** ROM status byte that indicates command success. */
 #define FF_UART_BOOT_STATUS_SUCCESS 0x00U
 
@@ -251,6 +258,40 @@ ff_status_t ff_uart_boot_build_command(ff_uart_boot_command_t command,
 ff_status_t ff_uart_boot_build_sync_command(uint8_t *output,
                                             size_t output_capacity,
                                             size_t *output_bytes);
+
+/**
+ * @brief Builds a complete SLIP-encoded ESP UART bootloader SYNC packet.
+ *
+ * @param[out] output Destination buffer for the encoded packet.
+ * @param[in] output_capacity Destination buffer capacity in bytes.
+ * @param[out] output_bytes Receives the number of packet bytes written.
+ *
+ * @return FF_STATUS_OK when packet construction succeeds; FF_STATUS_NO_MEMORY
+ *         when the destination is too small; otherwise an argument validation
+ *         status.
+ */
+ff_status_t ff_uart_boot_build_sync_packet(uint8_t *output,
+                                           size_t output_capacity,
+                                           size_t *output_bytes);
+
+/**
+ * @brief Adds one transport byte to a SYNC response exchange reader.
+ *
+ * @param[in,out] reader Reader receiving encoded response bytes.
+ * @param[in] byte Transport byte read from the serial stream.
+ * @param[out] sync_ready Receives true when a valid SYNC response completes.
+ * @param[out] value Receives the response value, or NULL to ignore it.
+ *
+ * @return FF_STATUS_OK when the byte is accepted; FF_STATUS_NO_MEMORY when the
+ *         decoded frame storage is full; FF_STATUS_CHECK_FAILED when the stream
+ *         or completed response is not a valid SYNC response; otherwise an
+ *         argument validation status.
+ */
+ff_status_t ff_uart_boot_sync_exchange_push(
+    ff_uart_boot_response_reader_t *reader,
+    uint8_t byte,
+    bool *sync_ready,
+    uint32_t *value);
 
 /**
  * @brief Parses one decoded ESP UART bootloader response frame.

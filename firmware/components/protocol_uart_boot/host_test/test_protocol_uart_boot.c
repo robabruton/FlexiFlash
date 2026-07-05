@@ -729,6 +729,192 @@ static void test_build_sync_command(void)
         "sync command rejects missing output");
 }
 
+static void test_build_sync_packet(void)
+{
+    uint8_t command[FF_UART_BOOT_SYNC_COMMAND_BYTES] = {0};
+    size_t command_bytes = 0U;
+    uint8_t expected[FF_UART_BOOT_SYNC_PACKET_BYTES] = {0};
+    size_t expected_bytes = 0U;
+    uint8_t output[FF_UART_BOOT_SYNC_PACKET_BYTES] = {0};
+    size_t output_bytes = 0U;
+
+    expect_status(
+        ff_uart_boot_build_sync_command(command,
+                                        sizeof(command),
+                                        &command_bytes),
+        FF_STATUS_OK,
+        "sync packet fixture builds command");
+    expect_status(
+        ff_uart_boot_slip_encode(command,
+                                 command_bytes,
+                                 expected,
+                                 sizeof(expected),
+                                 &expected_bytes),
+        FF_STATUS_OK,
+        "sync packet fixture encodes command");
+
+    expect_status(
+        ff_uart_boot_build_sync_packet(output,
+                                       sizeof(output),
+                                       &output_bytes),
+        FF_STATUS_OK,
+        "sync packet build succeeds");
+    expect_true(output_bytes == expected_bytes,
+                "sync packet reports encoded size");
+    expect_true(output_bytes == FF_UART_BOOT_SYNC_PACKET_BYTES,
+                "sync packet uses fixed encoded size");
+    expect_true(memcmp(output, expected, expected_bytes) == 0,
+                "sync packet matches encoded sync command");
+
+    expect_status(
+        ff_uart_boot_build_sync_packet(output,
+                                       sizeof(output) - 1U,
+                                       &output_bytes),
+        FF_STATUS_NO_MEMORY,
+        "sync packet reports small output");
+    expect_status(
+        ff_uart_boot_build_sync_packet(NULL,
+                                       sizeof(output),
+                                       &output_bytes),
+        FF_STATUS_INVALID_ARGUMENT,
+        "sync packet rejects missing output");
+    expect_status(
+        ff_uart_boot_build_sync_packet(output, sizeof(output), NULL),
+        FF_STATUS_INVALID_ARGUMENT,
+        "sync packet rejects missing byte count output");
+}
+
+static void test_sync_exchange_response(void)
+{
+    const uint8_t raw_response[] = {
+        FF_UART_BOOT_FRAME_DIRECTION_RESPONSE,
+        FF_UART_BOOT_COMMAND_SYNC,
+        0x02U,
+        0x00U,
+        0x78U,
+        0x56U,
+        0x34U,
+        0x12U,
+        FF_UART_BOOT_STATUS_SUCCESS,
+        FF_UART_BOOT_STATUS_SUCCESS,
+    };
+    uint8_t encoded[32] = {0};
+    size_t encoded_bytes = 0U;
+    uint8_t frame[sizeof(raw_response)] = {0};
+    ff_uart_boot_response_reader_t reader = {0};
+    bool sync_ready = false;
+    uint32_t value = 0U;
+
+    expect_status(
+        ff_uart_boot_slip_encode(raw_response,
+                                 sizeof(raw_response),
+                                 encoded,
+                                 sizeof(encoded),
+                                 &encoded_bytes),
+        FF_STATUS_OK,
+        "sync exchange fixture encodes response");
+    expect_status(
+        ff_uart_boot_response_reader_init(&reader, frame, sizeof(frame)),
+        FF_STATUS_OK,
+        "sync exchange reader init succeeds");
+
+    for (size_t i = 0U; i + 1U < encoded_bytes; ++i) {
+        expect_status(
+            ff_uart_boot_sync_exchange_push(&reader,
+                                            encoded[i],
+                                            &sync_ready,
+                                            &value),
+            FF_STATUS_OK,
+            "sync exchange accepts partial response byte");
+        expect_true(!sync_ready, "sync exchange waits for full response");
+    }
+
+    expect_status(
+        ff_uart_boot_sync_exchange_push(&reader,
+                                        encoded[encoded_bytes - 1U],
+                                        &sync_ready,
+                                        &value),
+        FF_STATUS_OK,
+        "sync exchange accepts completed response");
+    expect_true(sync_ready, "sync exchange reports validated response");
+    expect_true(value == 0x12345678U,
+                "sync exchange returns response value");
+
+    expect_status(
+        ff_uart_boot_sync_exchange_push(NULL,
+                                        FF_UART_BOOT_SLIP_END,
+                                        &sync_ready,
+                                        &value),
+        FF_STATUS_INVALID_ARGUMENT,
+        "sync exchange rejects missing reader");
+    expect_status(
+        ff_uart_boot_sync_exchange_push(&reader,
+                                        FF_UART_BOOT_SLIP_END,
+                                        NULL,
+                                        &value),
+        FF_STATUS_INVALID_ARGUMENT,
+        "sync exchange rejects missing ready output");
+}
+
+static void test_sync_exchange_errors(void)
+{
+    const uint8_t wrong_command[] = {
+        FF_UART_BOOT_FRAME_DIRECTION_RESPONSE,
+        0x09U,
+        0x02U,
+        0x00U,
+        0x00U,
+        0x00U,
+        0x00U,
+        0x00U,
+        FF_UART_BOOT_STATUS_SUCCESS,
+        FF_UART_BOOT_STATUS_SUCCESS,
+    };
+    uint8_t encoded[32] = {0};
+    size_t encoded_bytes = 0U;
+    uint8_t frame[sizeof(wrong_command)] = {0};
+    ff_uart_boot_response_reader_t reader = {0};
+    bool sync_ready = false;
+
+    expect_status(
+        ff_uart_boot_slip_encode(wrong_command,
+                                 sizeof(wrong_command),
+                                 encoded,
+                                 sizeof(encoded),
+                                 &encoded_bytes),
+        FF_STATUS_OK,
+        "sync exchange fixture encodes wrong-command response");
+    expect_status(
+        ff_uart_boot_response_reader_init(&reader, frame, sizeof(frame)),
+        FF_STATUS_OK,
+        "sync exchange reader init succeeds for error test");
+
+    for (size_t i = 0U; i + 1U < encoded_bytes; ++i) {
+        expect_status(
+            ff_uart_boot_sync_exchange_push(&reader,
+                                            encoded[i],
+                                            &sync_ready,
+                                            NULL),
+            FF_STATUS_OK,
+            "sync exchange accepts wrong-command prefix");
+        expect_true(!sync_ready,
+                    "sync exchange waits before wrong-command frame closes");
+    }
+
+    expect_status(
+        ff_uart_boot_sync_exchange_push(&reader,
+                                        encoded[encoded_bytes - 1U],
+                                        &sync_ready,
+                                        NULL),
+        FF_STATUS_CHECK_FAILED,
+        "sync exchange rejects wrong command response");
+    expect_true(!sync_ready,
+                "sync exchange does not report invalid response ready");
+    expect_true(!reader.accumulator.in_frame &&
+                    reader.accumulator.frame_bytes == 0U,
+                "sync exchange resets reader after invalid response");
+}
+
 static void test_parse_response(void)
 {
     const uint8_t frame[] = {
@@ -960,6 +1146,9 @@ int main(void)
     test_response_reader_errors();
     test_build_command();
     test_build_sync_command();
+    test_build_sync_packet();
+    test_sync_exchange_response();
+    test_sync_exchange_errors();
     test_parse_response();
     test_response_status();
     test_validate_sync_response();
