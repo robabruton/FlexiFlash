@@ -70,6 +70,18 @@ static void response_clear(ff_uart_boot_response_t *response)
     response->payload_bytes = 0U;
 }
 
+static bool transport_port_write_is_valid(
+    const ff_uart_boot_transport_port_t *port)
+{
+    return port != NULL && port->write != NULL;
+}
+
+static bool transport_port_read_is_valid(
+    const ff_uart_boot_transport_port_t *port)
+{
+    return port != NULL && port->read_byte != NULL;
+}
+
 static void write_u16_le(uint16_t value, uint8_t *output)
 {
     output[0] = (uint8_t)(value & 0xFFU);
@@ -487,6 +499,57 @@ ff_status_t ff_uart_boot_sync_exchange_push(
 
     *sync_ready = true;
     return FF_STATUS_OK;
+}
+
+ff_status_t ff_uart_boot_transport_send_sync(
+    const ff_uart_boot_transport_port_t *port,
+    uint8_t *scratch,
+    size_t scratch_capacity,
+    size_t *packet_bytes)
+{
+    if (!transport_port_write_is_valid(port) || scratch == NULL) {
+        return FF_STATUS_INVALID_ARGUMENT;
+    }
+
+    size_t encoded_bytes = 0U;
+    ff_status_t status = ff_uart_boot_build_sync_packet(scratch,
+                                                        scratch_capacity,
+                                                        &encoded_bytes);
+    if (status != FF_STATUS_OK) {
+        if (packet_bytes != NULL) {
+            *packet_bytes = 0U;
+        }
+        return status;
+    }
+
+    if (packet_bytes != NULL) {
+        *packet_bytes = encoded_bytes;
+    }
+    return port->write(port->context, scratch, encoded_bytes);
+}
+
+ff_status_t ff_uart_boot_transport_read_sync_response(
+    const ff_uart_boot_transport_port_t *port,
+    ff_uart_boot_response_reader_t *reader,
+    bool *sync_ready,
+    uint32_t *value)
+{
+    if (!transport_port_read_is_valid(port) ||
+        reader == NULL ||
+        sync_ready == NULL) {
+        return FF_STATUS_INVALID_ARGUMENT;
+    }
+
+    *sync_ready = false;
+
+    uint8_t byte = 0U;
+    bool byte_ready = false;
+    ff_status_t status = port->read_byte(port->context, &byte, &byte_ready);
+    if (status != FF_STATUS_OK || !byte_ready) {
+        return status;
+    }
+
+    return ff_uart_boot_sync_exchange_push(reader, byte, sync_ready, value);
 }
 
 ff_status_t ff_uart_boot_parse_response(const uint8_t *frame,
