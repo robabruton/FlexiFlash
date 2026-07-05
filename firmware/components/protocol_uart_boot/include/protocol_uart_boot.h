@@ -41,6 +41,9 @@
 /** Bytes in the ROM SYNC command payload. */
 #define FF_UART_BOOT_SYNC_PAYLOAD_BYTES 36U
 
+/** ROM status byte that indicates command success. */
+#define FF_UART_BOOT_STATUS_SUCCESS 0x00U
+
 /** ROM bootloader command identifiers used by the protocol contract. */
 typedef enum {
     FF_UART_BOOT_COMMAND_SYNC = 0x08,  /**< Synchronizes with the ROM bootloader. */
@@ -169,5 +172,18 @@ ff_status_t ff_uart_boot_response_status(
     size_t data_bytes,
     uint8_t *status,
     uint8_t *error);
+
+/**
+ * @brief Validates a decoded ESP UART bootloader SYNC response.
+ *
+ * @param[in] response Parsed response frame.
+ * @param[out] value Receives the response value, or NULL to ignore it.
+ *
+ * @return FF_STATUS_OK when the response is a successful SYNC response;
+ *         otherwise a validation status describing the failed check.
+ */
+ff_status_t ff_uart_boot_validate_sync_response(
+    const ff_uart_boot_response_t *response,
+    uint32_t *value);
 
 #endif /* FF_PROTOCOL_UART_BOOT_H */

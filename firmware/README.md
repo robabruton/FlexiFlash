@@ -19,8 +19,8 @@ Each app has its own `main/`, partition table, and `sdkconfig.defaults`. Both
 apps reference `firmware/components/` through `EXTRA_COMPONENT_DIRS`; the
 shared component tree contains common firmware primitives, product-wide build
 limits, target descriptor contracts and lookup helpers, ESP UART bootloader
-framing, response parsing, and SYNC command helpers, and the `board` component
-used by both apps.
+framing, response parsing, SYNC command construction, and SYNC response
+validation helpers, and the `board` component used by both apps.
 
 ## Building
 

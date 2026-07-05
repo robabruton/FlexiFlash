@@ -388,6 +388,71 @@ static void test_response_status(void)
                   "response status rejects missing status output");
 }
 
+static void test_validate_sync_response(void)
+{
+    const uint8_t frame[] = {
+        FF_UART_BOOT_FRAME_DIRECTION_RESPONSE,
+        FF_UART_BOOT_COMMAND_SYNC,
+        0x02U,
+        0x00U,
+        0x78U,
+        0x56U,
+        0x34U,
+        0x12U,
+        FF_UART_BOOT_STATUS_SUCCESS,
+        FF_UART_BOOT_STATUS_SUCCESS,
+    };
+    ff_uart_boot_response_t response = {0};
+    uint32_t value = 0U;
+
+    expect_status(ff_uart_boot_parse_response(frame,
+                                              sizeof(frame),
+                                              &response),
+                  FF_STATUS_OK,
+                  "sync response parser accepts valid frame");
+    expect_status(ff_uart_boot_validate_sync_response(&response, &value),
+                  FF_STATUS_OK,
+                  "sync response validator accepts success status");
+    expect_true(value == 0x12345678U,
+                "sync response validator returns response value");
+    expect_status(ff_uart_boot_validate_sync_response(&response, NULL),
+                  FF_STATUS_OK,
+                  "sync response validator accepts ignored value");
+
+    ff_uart_boot_response_t wrong_command = response;
+    wrong_command.command = (ff_uart_boot_command_t)0x09U;
+    expect_status(ff_uart_boot_validate_sync_response(&wrong_command, &value),
+                  FF_STATUS_CHECK_FAILED,
+                  "sync response validator rejects wrong command");
+
+    uint8_t failure_frame[sizeof(frame)] = {0};
+    memcpy(failure_frame, frame, sizeof(frame));
+    failure_frame[FF_UART_BOOT_RESPONSE_HEADER_BYTES] = 0x01U;
+    expect_status(ff_uart_boot_parse_response(failure_frame,
+                                              sizeof(failure_frame),
+                                              &response),
+                  FF_STATUS_OK,
+                  "sync response parser accepts failure status frame");
+    expect_status(ff_uart_boot_validate_sync_response(&response, &value),
+                  FF_STATUS_CHECK_FAILED,
+                  "sync response validator rejects failure status");
+
+    uint8_t short_payload[sizeof(frame) - 1U] = {0};
+    memcpy(short_payload, frame, sizeof(short_payload));
+    short_payload[2] = 0x01U;
+    expect_status(ff_uart_boot_parse_response(short_payload,
+                                              sizeof(short_payload),
+                                              &response),
+                  FF_STATUS_OK,
+                  "sync response parser accepts short payload frame");
+    expect_status(ff_uart_boot_validate_sync_response(&response, &value),
+                  FF_STATUS_CHECK_FAILED,
+                  "sync response validator rejects missing status");
+    expect_status(ff_uart_boot_validate_sync_response(NULL, &value),
+                  FF_STATUS_INVALID_ARGUMENT,
+                  "sync response validator rejects missing response");
+}
+
 int main(void)
 {
     test_checksum();
@@ -397,6 +462,7 @@ int main(void)
     test_build_sync_command();
     test_parse_response();
     test_response_status();
+    test_validate_sync_response();
 
     if (s_failures != 0) {
         fprintf(stderr,
