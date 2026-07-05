@@ -20,7 +20,8 @@ static const uint8_t k_sync_payload[FF_UART_BOOT_SYNC_PAYLOAD_BYTES] = {
     0x55U, 0x55U, 0x55U, 0x55U,
 };
 
-static bool payload_pointer_is_valid(const uint8_t *payload, size_t payload_bytes)
+static bool payload_pointer_is_valid(const uint8_t *payload,
+                                     size_t payload_bytes)
 {
     return payload != NULL || payload_bytes == 0U;
 }
@@ -95,8 +96,10 @@ ff_status_t ff_uart_boot_slip_encode(const uint8_t *input,
 
     *output_bytes = 0U;
 
-    ff_status_t status =
-        append_byte(FF_UART_BOOT_SLIP_END, output, output_capacity, output_bytes);
+    ff_status_t status = append_byte(FF_UART_BOOT_SLIP_END,
+                                     output,
+                                     output_capacity,
+                                     output_bytes);
     if (status != FF_STATUS_OK) {
         return status;
     }
@@ -128,7 +131,10 @@ ff_status_t ff_uart_boot_slip_encode(const uint8_t *input,
             }
             break;
         default:
-            status = append_byte(input[i], output, output_capacity, output_bytes);
+            status = append_byte(input[i],
+                                 output,
+                                 output_capacity,
+                                 output_bytes);
             break;
         }
 
@@ -207,7 +213,8 @@ ff_status_t ff_uart_boot_build_command(ff_uart_boot_command_t command,
         return FF_STATUS_INVALID_ARGUMENT;
     }
 
-    const size_t frame_bytes = FF_UART_BOOT_COMMAND_HEADER_BYTES + payload_bytes;
+    const size_t frame_bytes =
+        FF_UART_BOOT_COMMAND_HEADER_BYTES + payload_bytes;
     if (output_capacity < frame_bytes) {
         *output_bytes = 0U;
         return FF_STATUS_NO_MEMORY;

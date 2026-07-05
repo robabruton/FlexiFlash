@@ -32,12 +32,12 @@
  * @brief Product-wide build limits exposed as data.
  */
 typedef struct {
-    uint32_t max_firmware_image_bytes;      /**< Maximum stored image size. */
-    uint32_t firmware_image_chunk_bytes;    /**< Maximum stream chunk size. */
-    uint32_t max_image_name_bytes;          /**< Maximum image display name size. */
-    uint32_t max_image_metadata_bytes;      /**< Maximum metadata record size. */
-    uint32_t max_operation_detail_bytes;    /**< Maximum operation detail size. */
-    uint32_t max_operation_report_bytes;    /**< Maximum operation report size. */
+    uint32_t max_firmware_image_bytes;   /**< Maximum stored image size. */
+    uint32_t firmware_image_chunk_bytes; /**< Maximum stream chunk size. */
+    uint32_t max_image_name_bytes;       /**< Maximum image name size. */
+    uint32_t max_image_metadata_bytes;   /**< Maximum metadata record size. */
+    uint32_t max_operation_detail_bytes; /**< Maximum operation detail size. */
+    uint32_t max_operation_report_bytes; /**< Maximum report record size. */
 } ff_config_limits_t;
 
 /**

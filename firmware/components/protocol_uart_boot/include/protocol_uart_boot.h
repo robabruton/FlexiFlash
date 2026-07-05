@@ -46,23 +46,25 @@
 
 /** ROM bootloader command identifiers used by the protocol contract. */
 typedef enum {
-    FF_UART_BOOT_COMMAND_SYNC = 0x08,  /**< Synchronizes with the ROM bootloader. */
+    /** Synchronizes with the ROM bootloader. */
+    FF_UART_BOOT_COMMAND_SYNC = 0x08,
 } ff_uart_boot_command_t;
 
 /**
  * @brief Decoded ESP UART bootloader response frame.
  */
 typedef struct {
-    ff_uart_boot_command_t command;       /**< Command opcode echoed by the target. */
-    uint32_t               value;         /**< Command-specific response value. */
-    const uint8_t         *payload;       /**< Response payload inside the input frame. */
-    size_t                 payload_bytes; /**< Number of response payload bytes. */
+    ff_uart_boot_command_t command; /**< Command opcode echoed by the target. */
+    uint32_t value;                 /**< Command-specific response value. */
+    /** Response payload inside the input frame. */
+    const uint8_t *payload;
+    size_t payload_bytes; /**< Number of response payload bytes. */
 } ff_uart_boot_response_t;
 
 /**
  * @brief Calculates the bootloader checksum for command payload bytes.
  *
- * @param[in] payload Payload bytes to checksum, or NULL when payload_bytes is 0.
+ * @param[in] payload Payload bytes to checksum, or NULL for an empty payload.
  * @param[in] payload_bytes Number of payload bytes.
  *
  * @return Command checksum byte widened to 32 bits for frame storage.

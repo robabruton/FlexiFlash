@@ -16,26 +16,27 @@
  * information than the status alone provides.
  */
 typedef enum {
-    FF_STATUS_OK = 0,             /**< Operation completed successfully. */
-    FF_STATUS_INVALID_ARGUMENT,   /**< Caller supplied an invalid argument. */
-    FF_STATUS_UNSUPPORTED,        /**< Requested capability is not supported. */
-    FF_STATUS_BUSY,               /**< Resource or operation is already in use. */
-    FF_STATUS_TIMEOUT,            /**< Operation exceeded its time limit. */
-    FF_STATUS_IO_ERROR,           /**< Underlying transport or storage I/O failed. */
-    FF_STATUS_NO_MEMORY,          /**< Allocation or fixed-capacity buffer failed. */
-    FF_STATUS_NOT_FOUND,          /**< Requested object or descriptor was absent. */
-    FF_STATUS_INVALID_STATE,      /**< Operation is not valid in the current state. */
-    FF_STATUS_CHECK_FAILED,       /**< Integrity or validation check failed. */
-    FF_STATUS_CANCELLED,          /**< Operation was cancelled before completion. */
-    FF_STATUS_INTERNAL_ERROR,     /**< Component hit an unexpected internal failure. */
+    FF_STATUS_OK = 0,           /**< Operation completed successfully. */
+    FF_STATUS_INVALID_ARGUMENT, /**< Caller supplied an invalid argument. */
+    FF_STATUS_UNSUPPORTED,      /**< Requested capability is not supported. */
+    FF_STATUS_BUSY,             /**< Resource or operation is already in use. */
+    FF_STATUS_TIMEOUT,          /**< Operation exceeded its time limit. */
+    FF_STATUS_IO_ERROR,         /**< Transport or storage I/O failed. */
+    FF_STATUS_NO_MEMORY,        /**< Allocation or fixed buffer failed. */
+    FF_STATUS_NOT_FOUND,        /**< Requested object was absent. */
+    FF_STATUS_INVALID_STATE,    /**< Operation is invalid in this state. */
+    FF_STATUS_CHECK_FAILED,     /**< Integrity or validation check failed. */
+    FF_STATUS_CANCELLED,        /**< Operation was cancelled. */
+    FF_STATUS_INTERNAL_ERROR,   /**< Unexpected internal failure. */
 } ff_status_t;
 
 /**
  * @brief Result value with optional diagnostic context.
  */
 typedef struct {
-    ff_status_t status;       /**< Programmatic status code. */
-    const char *detail;       /**< Optional static diagnostic detail, or NULL. */
+    ff_status_t status; /**< Programmatic status code. */
+    /** Optional static diagnostic detail, or NULL. */
+    const char *detail;
 } ff_result_t;
 
 /**
