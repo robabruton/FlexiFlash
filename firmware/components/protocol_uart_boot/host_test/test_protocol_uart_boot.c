@@ -55,6 +55,35 @@ static void expect_accumulator_push(
                 "accumulator frame byte count matches expectation");
 }
 
+static void expect_reader_push(ff_uart_boot_response_reader_t *reader,
+                               uint8_t byte,
+                               ff_status_t expected_status,
+                               bool expected_ready,
+                               const char *message)
+{
+    bool response_ready = true;
+    ff_uart_boot_response_t response = {
+        .command = FF_UART_BOOT_COMMAND_SYNC,
+        .value = 0xFFFFFFFFU,
+        .payload = (const uint8_t *)0x1,
+        .payload_bytes = 0xFFFFU,
+    };
+    ff_status_t status =
+        ff_uart_boot_response_reader_push(reader,
+                                          byte,
+                                          &response_ready,
+                                          &response);
+
+    expect_status(status, expected_status, message);
+    expect_true(response_ready == expected_ready,
+                "reader response-ready flag matches expectation");
+
+    if (!expected_ready) {
+        expect_true(response.payload == NULL && response.payload_bytes == 0U,
+                    "reader clears response view while incomplete");
+    }
+}
+
 static void test_checksum(void)
 {
     const uint8_t payload[] = {0x01U, 0x02U};
@@ -390,6 +419,211 @@ static void test_frame_accumulator_errors(void)
         "accumulator push rejects missing byte count output");
 }
 
+static void test_response_reader_init_reset(void)
+{
+    uint8_t frame[16] = {0};
+    ff_uart_boot_response_reader_t reader = {0};
+
+    expect_status(
+        ff_uart_boot_response_reader_init(&reader, frame, sizeof(frame)),
+        FF_STATUS_OK,
+        "response reader init succeeds");
+    expect_true(reader.accumulator.frame == frame,
+                "response reader stores frame buffer");
+    expect_true(reader.accumulator.capacity == sizeof(frame),
+                "response reader stores frame capacity");
+
+    reader.accumulator.frame_bytes = 2U;
+    reader.accumulator.in_frame = true;
+    reader.accumulator.escaping = true;
+    expect_status(
+        ff_uart_boot_response_reader_reset(&reader),
+        FF_STATUS_OK,
+        "response reader reset succeeds");
+    expect_true(reader.accumulator.frame_bytes == 0U,
+                "response reader reset clears decoded bytes");
+    expect_true(!reader.accumulator.in_frame &&
+                    !reader.accumulator.escaping,
+                "response reader reset clears receive state");
+
+    expect_status(
+        ff_uart_boot_response_reader_init(NULL, frame, sizeof(frame)),
+        FF_STATUS_INVALID_ARGUMENT,
+        "response reader init rejects missing state");
+    expect_status(
+        ff_uart_boot_response_reader_init(&reader, NULL, sizeof(frame)),
+        FF_STATUS_INVALID_ARGUMENT,
+        "response reader init rejects missing frame buffer");
+    expect_status(
+        ff_uart_boot_response_reader_reset(NULL),
+        FF_STATUS_INVALID_ARGUMENT,
+        "response reader reset rejects missing state");
+}
+
+static void test_response_reader_packet(void)
+{
+    const uint8_t raw_response[] = {
+        FF_UART_BOOT_FRAME_DIRECTION_RESPONSE,
+        FF_UART_BOOT_COMMAND_SYNC,
+        0x02U,
+        0x00U,
+        0x78U,
+        0x56U,
+        0x34U,
+        0x12U,
+        FF_UART_BOOT_STATUS_SUCCESS,
+        FF_UART_BOOT_STATUS_SUCCESS,
+    };
+    uint8_t encoded[32] = {0};
+    size_t encoded_bytes = 0U;
+    uint8_t frame[sizeof(raw_response)] = {0};
+    ff_uart_boot_response_reader_t reader = {0};
+    ff_uart_boot_response_t response = {0};
+    bool response_ready = false;
+
+    expect_status(
+        ff_uart_boot_slip_encode(raw_response,
+                                 sizeof(raw_response),
+                                 encoded,
+                                 sizeof(encoded),
+                                 &encoded_bytes),
+        FF_STATUS_OK,
+        "response reader fixture encodes response");
+    expect_status(
+        ff_uart_boot_response_reader_init(&reader, frame, sizeof(frame)),
+        FF_STATUS_OK,
+        "response reader init succeeds for packet test");
+
+    for (size_t i = 0U; i + 1U < encoded_bytes; ++i) {
+        expect_status(
+            ff_uart_boot_response_reader_push(&reader,
+                                              encoded[i],
+                                              &response_ready,
+                                              &response),
+            FF_STATUS_OK,
+            "response reader accepts partial response byte");
+        expect_true(!response_ready, "response reader waits for full frame");
+        expect_true(response.payload == NULL && response.payload_bytes == 0U,
+                    "response reader clears partial response view");
+    }
+
+    expect_status(
+        ff_uart_boot_response_reader_push(&reader,
+                                          encoded[encoded_bytes - 1U],
+                                          &response_ready,
+                                          &response),
+        FF_STATUS_OK,
+        "response reader accepts closing delimiter");
+    expect_true(response_ready, "response reader reports parsed response");
+    expect_true(response.command == FF_UART_BOOT_COMMAND_SYNC,
+                "response reader stores parsed command");
+    expect_true(response.value == 0x12345678U,
+                "response reader stores parsed value");
+    expect_true(response.payload == &frame[FF_UART_BOOT_RESPONSE_HEADER_BYTES],
+                "response reader payload points into frame storage");
+    expect_true(response.payload_bytes == FF_UART_BOOT_STATUS_BYTES,
+                "response reader stores parsed payload length");
+}
+
+static void test_response_reader_errors(void)
+{
+    const uint8_t bad_response[] = {
+        FF_UART_BOOT_FRAME_DIRECTION_COMMAND,
+        FF_UART_BOOT_COMMAND_SYNC,
+        0x00U,
+        0x00U,
+        0x00U,
+        0x00U,
+        0x00U,
+        0x00U,
+    };
+    uint8_t encoded_bad[16] = {0};
+    size_t encoded_bad_bytes = 0U;
+    uint8_t frame[16] = {0};
+    ff_uart_boot_response_reader_t reader = {0};
+    ff_uart_boot_response_t response = {0};
+    bool response_ready = false;
+
+    expect_status(
+        ff_uart_boot_slip_encode(bad_response,
+                                 sizeof(bad_response),
+                                 encoded_bad,
+                                 sizeof(encoded_bad),
+                                 &encoded_bad_bytes),
+        FF_STATUS_OK,
+        "response reader fixture encodes malformed response");
+    expect_status(
+        ff_uart_boot_response_reader_init(&reader, frame, sizeof(frame)),
+        FF_STATUS_OK,
+        "response reader init succeeds for error test");
+
+    for (size_t i = 0U; i + 1U < encoded_bad_bytes; ++i) {
+        expect_status(
+            ff_uart_boot_response_reader_push(&reader,
+                                              encoded_bad[i],
+                                              &response_ready,
+                                              &response),
+            FF_STATUS_OK,
+            "response reader accepts malformed response prefix");
+        expect_true(!response_ready,
+                    "response reader waits before malformed frame closes");
+    }
+
+    expect_status(
+        ff_uart_boot_response_reader_push(
+            &reader,
+            encoded_bad[encoded_bad_bytes - 1U],
+            &response_ready,
+            &response),
+        FF_STATUS_CHECK_FAILED,
+        "response reader rejects malformed decoded response");
+    expect_true(!response_ready,
+                "response reader does not report malformed response ready");
+    expect_true(!reader.accumulator.in_frame &&
+                    reader.accumulator.frame_bytes == 0U,
+                "response reader resets after malformed response");
+
+    expect_reader_push(&reader,
+                       FF_UART_BOOT_SLIP_END,
+                       FF_STATUS_OK,
+                       false,
+                       "response reader restarts after malformed response");
+    expect_reader_push(&reader,
+                       FF_UART_BOOT_SLIP_ESC,
+                       FF_STATUS_OK,
+                       false,
+                       "response reader records pending escape");
+    expect_reader_push(&reader,
+                       0x00U,
+                       FF_STATUS_CHECK_FAILED,
+                       false,
+                       "response reader rejects malformed SLIP escape");
+    expect_true(!reader.accumulator.in_frame,
+                "response reader resets after malformed SLIP escape");
+
+    expect_status(
+        ff_uart_boot_response_reader_push(NULL,
+                                          FF_UART_BOOT_SLIP_END,
+                                          &response_ready,
+                                          &response),
+        FF_STATUS_INVALID_ARGUMENT,
+        "response reader push rejects missing state");
+    expect_status(
+        ff_uart_boot_response_reader_push(&reader,
+                                          FF_UART_BOOT_SLIP_END,
+                                          NULL,
+                                          &response),
+        FF_STATUS_INVALID_ARGUMENT,
+        "response reader push rejects missing ready output");
+    expect_status(
+        ff_uart_boot_response_reader_push(&reader,
+                                          FF_UART_BOOT_SLIP_END,
+                                          &response_ready,
+                                          NULL),
+        FF_STATUS_INVALID_ARGUMENT,
+        "response reader push rejects missing response output");
+}
+
 static void test_build_command(void)
 {
     const uint8_t payload[] = {0x01U, 0x02U};
@@ -721,6 +955,9 @@ int main(void)
     test_frame_accumulator_init_reset();
     test_frame_accumulator_packet();
     test_frame_accumulator_errors();
+    test_response_reader_init_reset();
+    test_response_reader_packet();
+    test_response_reader_errors();
     test_build_command();
     test_build_sync_command();
     test_parse_response();

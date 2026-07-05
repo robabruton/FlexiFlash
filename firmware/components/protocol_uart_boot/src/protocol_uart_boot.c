@@ -62,6 +62,14 @@ static ff_status_t frame_accumulator_append(
     return FF_STATUS_OK;
 }
 
+static void response_clear(ff_uart_boot_response_t *response)
+{
+    response->command = 0U;
+    response->value = 0U;
+    response->payload = NULL;
+    response->payload_bytes = 0U;
+}
+
 static void write_u16_le(uint16_t value, uint8_t *output)
 {
     output[0] = (uint8_t)(value & 0xFFU);
@@ -306,6 +314,72 @@ ff_status_t ff_uart_boot_frame_accumulator_push(
     return frame_accumulator_append(accumulator, byte);
 }
 
+ff_status_t ff_uart_boot_response_reader_init(
+    ff_uart_boot_response_reader_t *reader,
+    uint8_t *frame,
+    size_t frame_capacity)
+{
+    if (reader == NULL) {
+        return FF_STATUS_INVALID_ARGUMENT;
+    }
+
+    return ff_uart_boot_frame_accumulator_init(&reader->accumulator,
+                                               frame,
+                                               frame_capacity);
+}
+
+ff_status_t ff_uart_boot_response_reader_reset(
+    ff_uart_boot_response_reader_t *reader)
+{
+    if (reader == NULL) {
+        return FF_STATUS_INVALID_ARGUMENT;
+    }
+
+    return ff_uart_boot_frame_accumulator_reset(&reader->accumulator);
+}
+
+ff_status_t ff_uart_boot_response_reader_push(
+    ff_uart_boot_response_reader_t *reader,
+    uint8_t byte,
+    bool *response_ready,
+    ff_uart_boot_response_t *response)
+{
+    if (reader == NULL || response_ready == NULL || response == NULL) {
+        return FF_STATUS_INVALID_ARGUMENT;
+    }
+
+    *response_ready = false;
+    response_clear(response);
+
+    bool frame_ready = false;
+    size_t frame_bytes = 0U;
+    ff_status_t status =
+        ff_uart_boot_frame_accumulator_push(&reader->accumulator,
+                                            byte,
+                                            &frame_ready,
+                                            &frame_bytes);
+    if (status != FF_STATUS_OK) {
+        (void)ff_uart_boot_response_reader_reset(reader);
+        return status;
+    }
+
+    if (!frame_ready) {
+        return FF_STATUS_OK;
+    }
+
+    status = ff_uart_boot_parse_response(reader->accumulator.frame,
+                                         frame_bytes,
+                                         response);
+    if (status != FF_STATUS_OK) {
+        (void)ff_uart_boot_response_reader_reset(reader);
+        response_clear(response);
+        return status;
+    }
+
+    *response_ready = true;
+    return FF_STATUS_OK;
+}
+
 ff_status_t ff_uart_boot_build_command(ff_uart_boot_command_t command,
                                        const uint8_t *payload,
                                        size_t payload_bytes,
@@ -360,10 +434,7 @@ ff_status_t ff_uart_boot_parse_response(const uint8_t *frame,
         return FF_STATUS_INVALID_ARGUMENT;
     }
 
-    response->command = 0U;
-    response->value = 0U;
-    response->payload = NULL;
-    response->payload_bytes = 0U;
+    response_clear(response);
 
     if (frame_bytes < FF_UART_BOOT_RESPONSE_HEADER_BYTES ||
         frame[0] != FF_UART_BOOT_FRAME_DIRECTION_RESPONSE) {
