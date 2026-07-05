@@ -11,3 +11,6 @@ Thumbs.db
 # ESP-IDF local build output
 firmware/apps/*/build/
 firmware/apps/*/sdkconfig
+
+# Host-test local build output
+firmware/components/*/host_test/build/

@@ -41,11 +41,22 @@ static const ff_target_descriptor_t s_target_descriptors[] = {
 static const size_t s_target_descriptor_count =
     sizeof(s_target_descriptors) / sizeof(s_target_descriptors[0]);
 
+static size_t bounded_text_length(const char *value, size_t max_bytes)
+{
+    size_t length = 0U;
+
+    while (length <= max_bytes && value[length] != '\0') {
+        ++length;
+    }
+
+    return length;
+}
+
 static bool text_field_is_valid(const char *value, size_t max_bytes)
 {
     return value != NULL &&
            value[0] != '\0' &&
-           strnlen(value, max_bytes + 1U) <= max_bytes;
+           bounded_text_length(value, max_bytes) <= max_bytes;
 }
 
 static bool match_kind_is_valid(ff_target_match_kind_t kind)

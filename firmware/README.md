@@ -34,3 +34,13 @@ profile through its variant-specific `sdkconfig.defaults`.
 
 Bench bring-up on development hardware stays out of the tracked app projects.
 Keep local development-board configuration under `local/`.
+
+## Host Tests
+
+Component host tests build with CMake from the component test directory:
+
+```sh
+cmake -S firmware/components/target_db/host_test -B firmware/components/target_db/host_test/build
+cmake --build firmware/components/target_db/host_test/build
+ctest --test-dir firmware/components/target_db/host_test/build --output-on-failure
+```
