@@ -19,7 +19,8 @@ Each app has its own `main/`, partition table, and `sdkconfig.defaults`. Both
 apps reference `firmware/components/` through `EXTRA_COMPONENT_DIRS`; the
 shared component tree contains common firmware primitives, product-wide build
 limits, target descriptor contracts and lookup helpers, ESP UART bootloader
-framing helpers, and the `board` component used by both apps.
+framing and response parsing helpers, and the `board` component used by both
+apps.
 
 ## Building
 
@@ -47,4 +48,4 @@ ctest --test-dir firmware/components/target_db/host_test/build --output-on-failu
 ```
 
 Use `firmware/components/protocol_uart_boot/host_test` for the ESP UART
-bootloader framing tests.
+bootloader framing and response parsing tests.

@@ -26,13 +26,32 @@
 /** Direction byte for command frames sent to the target bootloader. */
 #define FF_UART_BOOT_FRAME_DIRECTION_COMMAND 0x00U
 
+/** Direction byte for response frames returned by the target bootloader. */
+#define FF_UART_BOOT_FRAME_DIRECTION_RESPONSE 0x01U
+
 /** Bytes in a command frame before the payload. */
 #define FF_UART_BOOT_COMMAND_HEADER_BYTES 8U
+
+/** Bytes in a response frame before the payload. */
+#define FF_UART_BOOT_RESPONSE_HEADER_BYTES 8U
+
+/** Bytes in a ROM command status result. */
+#define FF_UART_BOOT_STATUS_BYTES 2U
 
 /** ROM bootloader command identifiers used by the protocol contract. */
 typedef enum {
     FF_UART_BOOT_COMMAND_SYNC = 0x08,  /**< Synchronizes with the ROM bootloader. */
 } ff_uart_boot_command_t;
+
+/**
+ * @brief Decoded ESP UART bootloader response frame.
+ */
+typedef struct {
+    ff_uart_boot_command_t command;       /**< Command opcode echoed by the target. */
+    uint32_t               value;         /**< Command-specific response value. */
+    const uint8_t         *payload;       /**< Response payload inside the input frame. */
+    size_t                 payload_bytes; /**< Number of response payload bytes. */
+} ff_uart_boot_response_t;
 
 /**
  * @brief Calculates the bootloader checksum for command payload bytes.
@@ -101,5 +120,36 @@ ff_status_t ff_uart_boot_build_command(ff_uart_boot_command_t command,
                                        uint8_t *output,
                                        size_t output_capacity,
                                        size_t *output_bytes);
+
+/**
+ * @brief Parses one decoded ESP UART bootloader response frame.
+ *
+ * @param[in] frame Unescaped response frame bytes.
+ * @param[in] frame_bytes Number of unescaped response frame bytes.
+ * @param[out] response Receives the decoded response view.
+ *
+ * @return FF_STATUS_OK when the response is well formed; otherwise a validation
+ *         status describing the failed check.
+ */
+ff_status_t ff_uart_boot_parse_response(const uint8_t *frame,
+                                        size_t frame_bytes,
+                                        ff_uart_boot_response_t *response);
+
+/**
+ * @brief Reads command status bytes from a parsed response payload.
+ *
+ * @param[in] response Parsed response frame.
+ * @param[in] data_bytes Number of command-specific data bytes before status.
+ * @param[out] status Receives the ROM status byte.
+ * @param[out] error Receives the ROM error byte.
+ *
+ * @return FF_STATUS_OK when status bytes are present; otherwise a validation
+ *         status describing the failed check.
+ */
+ff_status_t ff_uart_boot_response_status(
+    const ff_uart_boot_response_t *response,
+    size_t data_bytes,
+    uint8_t *status,
+    uint8_t *error);
 
 #endif /* FF_PROTOCOL_UART_BOOT_H */

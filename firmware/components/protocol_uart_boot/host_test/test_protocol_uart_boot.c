@@ -209,12 +209,145 @@ static void test_build_command(void)
                   "command build rejects missing payload");
 }
 
+static void test_parse_response(void)
+{
+    const uint8_t frame[] = {
+        FF_UART_BOOT_FRAME_DIRECTION_RESPONSE,
+        FF_UART_BOOT_COMMAND_SYNC,
+        0x04U,
+        0x00U,
+        0x78U,
+        0x56U,
+        0x34U,
+        0x12U,
+        0xAAU,
+        0xBBU,
+        0x00U,
+        0x00U,
+    };
+    ff_uart_boot_response_t response = {0};
+
+    expect_status(ff_uart_boot_parse_response(frame,
+                                              sizeof(frame),
+                                              &response),
+                  FF_STATUS_OK,
+                  "response parser accepts valid frame");
+    expect_true(response.command == FF_UART_BOOT_COMMAND_SYNC,
+                "response parser stores opcode");
+    expect_true(response.value == 0x12345678U,
+                "response parser stores little-endian value");
+    expect_true(response.payload_bytes == 4U,
+                "response parser stores payload length");
+    expect_true(response.payload == &frame[FF_UART_BOOT_RESPONSE_HEADER_BYTES],
+                "response parser points into input payload");
+    expect_true(response.payload[0] == 0xAAU && response.payload[1] == 0xBBU,
+                "response parser exposes payload bytes");
+
+    uint8_t status = 0xFFU;
+    uint8_t error = 0xFFU;
+    expect_status(ff_uart_boot_response_status(&response,
+                                               2U,
+                                               &status,
+                                               &error),
+                  FF_STATUS_OK,
+                  "response status reads after command data");
+    expect_true(status == 0U && error == 0U,
+                "response status reports success bytes");
+
+    uint8_t bad_direction[sizeof(frame)] = {0};
+    memcpy(bad_direction, frame, sizeof(frame));
+    bad_direction[0] = FF_UART_BOOT_FRAME_DIRECTION_COMMAND;
+    expect_status(ff_uart_boot_parse_response(bad_direction,
+                                              sizeof(bad_direction),
+                                              &response),
+                  FF_STATUS_CHECK_FAILED,
+                  "response parser rejects command-direction frames");
+
+    uint8_t bad_length[sizeof(frame)] = {0};
+    memcpy(bad_length, frame, sizeof(frame));
+    bad_length[2] = 0x05U;
+    expect_status(ff_uart_boot_parse_response(bad_length,
+                                              sizeof(bad_length),
+                                              &response),
+                  FF_STATUS_CHECK_FAILED,
+                  "response parser rejects inconsistent lengths");
+
+    expect_status(ff_uart_boot_parse_response(frame,
+                                              FF_UART_BOOT_RESPONSE_HEADER_BYTES - 1U,
+                                              &response),
+                  FF_STATUS_CHECK_FAILED,
+                  "response parser rejects short frames");
+    expect_status(ff_uart_boot_parse_response(NULL,
+                                              sizeof(frame),
+                                              &response),
+                  FF_STATUS_INVALID_ARGUMENT,
+                  "response parser rejects missing frame");
+    expect_status(ff_uart_boot_parse_response(frame,
+                                              sizeof(frame),
+                                              NULL),
+                  FF_STATUS_INVALID_ARGUMENT,
+                  "response parser rejects missing output");
+}
+
+static void test_response_status(void)
+{
+    const uint8_t frame[] = {
+        FF_UART_BOOT_FRAME_DIRECTION_RESPONSE,
+        FF_UART_BOOT_COMMAND_SYNC,
+        0x02U,
+        0x00U,
+        0x00U,
+        0x00U,
+        0x00U,
+        0x00U,
+        0x05U,
+        0x06U,
+    };
+    ff_uart_boot_response_t response = {0};
+    uint8_t status = 0U;
+    uint8_t error = 0U;
+
+    expect_status(ff_uart_boot_parse_response(frame,
+                                              sizeof(frame),
+                                              &response),
+                  FF_STATUS_OK,
+                  "response parser accepts status-only frame");
+    expect_status(ff_uart_boot_response_status(&response,
+                                               0U,
+                                               &status,
+                                               &error),
+                  FF_STATUS_OK,
+                  "response status reads status-only payload");
+    expect_true(status == 0x05U && error == 0x06U,
+                "response status exposes failure bytes");
+    expect_status(ff_uart_boot_response_status(&response,
+                                               1U,
+                                               &status,
+                                               &error),
+                  FF_STATUS_CHECK_FAILED,
+                  "response status rejects missing status bytes");
+    expect_status(ff_uart_boot_response_status(NULL,
+                                               0U,
+                                               &status,
+                                               &error),
+                  FF_STATUS_INVALID_ARGUMENT,
+                  "response status rejects missing response");
+    expect_status(ff_uart_boot_response_status(&response,
+                                               0U,
+                                               NULL,
+                                               &error),
+                  FF_STATUS_INVALID_ARGUMENT,
+                  "response status rejects missing status output");
+}
+
 int main(void)
 {
     test_checksum();
     test_slip_encode();
     test_slip_decode();
     test_build_command();
+    test_parse_response();
+    test_response_status();
 
     if (s_failures != 0) {
         fprintf(stderr,

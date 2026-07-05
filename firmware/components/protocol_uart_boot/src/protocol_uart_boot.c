@@ -40,6 +40,19 @@ static void write_u32_le(uint32_t value, uint8_t *output)
     output[3] = (uint8_t)((value >> 24U) & 0xFFU);
 }
 
+static uint16_t read_u16_le(const uint8_t *input)
+{
+    return (uint16_t)input[0] | ((uint16_t)input[1] << 8U);
+}
+
+static uint32_t read_u32_le(const uint8_t *input)
+{
+    return (uint32_t)input[0] |
+           ((uint32_t)input[1] << 8U) |
+           ((uint32_t)input[2] << 16U) |
+           ((uint32_t)input[3] << 24U);
+}
+
 uint32_t ff_uart_boot_checksum(const uint8_t *payload, size_t payload_bytes)
 {
     uint8_t checksum = 0xEFU;
@@ -197,5 +210,58 @@ ff_status_t ff_uart_boot_build_command(ff_uart_boot_command_t command,
     }
 
     *output_bytes = frame_bytes;
+    return FF_STATUS_OK;
+}
+
+ff_status_t ff_uart_boot_parse_response(const uint8_t *frame,
+                                        size_t frame_bytes,
+                                        ff_uart_boot_response_t *response)
+{
+    if (frame == NULL || response == NULL) {
+        return FF_STATUS_INVALID_ARGUMENT;
+    }
+
+    response->command = 0U;
+    response->value = 0U;
+    response->payload = NULL;
+    response->payload_bytes = 0U;
+
+    if (frame_bytes < FF_UART_BOOT_RESPONSE_HEADER_BYTES ||
+        frame[0] != FF_UART_BOOT_FRAME_DIRECTION_RESPONSE) {
+        return FF_STATUS_CHECK_FAILED;
+    }
+
+    const uint16_t payload_bytes = read_u16_le(&frame[2]);
+    if ((size_t)payload_bytes !=
+        frame_bytes - FF_UART_BOOT_RESPONSE_HEADER_BYTES) {
+        return FF_STATUS_CHECK_FAILED;
+    }
+
+    response->command = (ff_uart_boot_command_t)frame[1];
+    response->payload_bytes = payload_bytes;
+    response->value = read_u32_le(&frame[4]);
+    response->payload = &frame[FF_UART_BOOT_RESPONSE_HEADER_BYTES];
+
+    return FF_STATUS_OK;
+}
+
+ff_status_t ff_uart_boot_response_status(
+    const ff_uart_boot_response_t *response,
+    size_t data_bytes,
+    uint8_t *status,
+    uint8_t *error)
+{
+    if (response == NULL || status == NULL || error == NULL) {
+        return FF_STATUS_INVALID_ARGUMENT;
+    }
+
+    if (response->payload == NULL ||
+        response->payload_bytes < data_bytes ||
+        response->payload_bytes - data_bytes < FF_UART_BOOT_STATUS_BYTES) {
+        return FF_STATUS_CHECK_FAILED;
+    }
+
+    *status = response->payload[data_bytes];
+    *error = response->payload[data_bytes + 1U];
     return FF_STATUS_OK;
 }
