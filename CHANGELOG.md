@@ -12,4 +12,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   variants sharing common status/result primitives, product-wide build limits,
   target descriptor contracts and lookup helpers, and a board-profile
   component, with host-side coverage for the target descriptor table and ESP
-  UART bootloader framing and response parsing helpers.
+  UART bootloader framing, response parsing, and SYNC command helpers.

@@ -7,6 +7,19 @@
 
 #include <stdbool.h>
 
+/** ROM SYNC command payload used to establish bootloader communication. */
+static const uint8_t k_sync_payload[FF_UART_BOOT_SYNC_PAYLOAD_BYTES] = {
+    0x07U, 0x07U, 0x12U, 0x20U,
+    0x55U, 0x55U, 0x55U, 0x55U,
+    0x55U, 0x55U, 0x55U, 0x55U,
+    0x55U, 0x55U, 0x55U, 0x55U,
+    0x55U, 0x55U, 0x55U, 0x55U,
+    0x55U, 0x55U, 0x55U, 0x55U,
+    0x55U, 0x55U, 0x55U, 0x55U,
+    0x55U, 0x55U, 0x55U, 0x55U,
+    0x55U, 0x55U, 0x55U, 0x55U,
+};
+
 static bool payload_pointer_is_valid(const uint8_t *payload, size_t payload_bytes)
 {
     return payload != NULL || payload_bytes == 0U;
@@ -211,6 +224,18 @@ ff_status_t ff_uart_boot_build_command(ff_uart_boot_command_t command,
 
     *output_bytes = frame_bytes;
     return FF_STATUS_OK;
+}
+
+ff_status_t ff_uart_boot_build_sync_command(uint8_t *output,
+                                            size_t output_capacity,
+                                            size_t *output_bytes)
+{
+    return ff_uart_boot_build_command(FF_UART_BOOT_COMMAND_SYNC,
+                                      k_sync_payload,
+                                      sizeof(k_sync_payload),
+                                      output,
+                                      output_capacity,
+                                      output_bytes);
 }
 
 ff_status_t ff_uart_boot_parse_response(const uint8_t *frame,

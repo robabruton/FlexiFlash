@@ -38,6 +38,9 @@
 /** Bytes in a ROM command status result. */
 #define FF_UART_BOOT_STATUS_BYTES 2U
 
+/** Bytes in the ROM SYNC command payload. */
+#define FF_UART_BOOT_SYNC_PAYLOAD_BYTES 36U
+
 /** ROM bootloader command identifiers used by the protocol contract. */
 typedef enum {
     FF_UART_BOOT_COMMAND_SYNC = 0x08,  /**< Synchronizes with the ROM bootloader. */
@@ -120,6 +123,21 @@ ff_status_t ff_uart_boot_build_command(ff_uart_boot_command_t command,
                                        uint8_t *output,
                                        size_t output_capacity,
                                        size_t *output_bytes);
+
+/**
+ * @brief Builds an unescaped ESP UART bootloader SYNC command frame.
+ *
+ * @param[out] output Destination buffer for the unescaped command frame.
+ * @param[in] output_capacity Destination buffer capacity in bytes.
+ * @param[out] output_bytes Receives the number of frame bytes written.
+ *
+ * @return FF_STATUS_OK when frame construction succeeds; FF_STATUS_NO_MEMORY
+ *         when the destination is too small; otherwise an argument validation
+ *         status.
+ */
+ff_status_t ff_uart_boot_build_sync_command(uint8_t *output,
+                                            size_t output_capacity,
+                                            size_t *output_bytes);
 
 /**
  * @brief Parses one decoded ESP UART bootloader response frame.
