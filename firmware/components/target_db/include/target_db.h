@@ -134,4 +134,40 @@ const char *ff_target_protocol_name(ff_target_protocol_t protocol);
  */
 ff_status_t ff_target_descriptor_validate(const ff_target_descriptor_t *descriptor);
 
+/**
+ * @brief Counts compiled-in target descriptors.
+ *
+ * @param[out] count Receives the number of available descriptors.
+ *
+ * @return FF_STATUS_OK when the compiled-in descriptor table is valid; otherwise
+ *         a status describing the failed validation class.
+ */
+ff_status_t ff_target_descriptor_count(size_t *count);
+
+/**
+ * @brief Returns a compiled-in target descriptor by table index.
+ *
+ * @param[in] index Descriptor table index to read.
+ * @param[out] descriptor Receives the descriptor pointer on success.
+ *
+ * @return FF_STATUS_OK when the descriptor exists; FF_STATUS_NOT_FOUND when the
+ *         index is outside the table; otherwise a descriptor validation status.
+ */
+ff_status_t ff_target_descriptor_at(size_t index,
+                                    const ff_target_descriptor_t **descriptor);
+
+/**
+ * @brief Finds a compiled-in target descriptor by stable ID.
+ *
+ * @param[in] id Stable descriptor ID to find.
+ * @param[out] descriptor Receives the descriptor pointer on success.
+ *
+ * @return FF_STATUS_OK when a matching descriptor exists; FF_STATUS_NOT_FOUND
+ *         when no descriptor uses the ID; otherwise a descriptor validation
+ *         status.
+ */
+ff_status_t ff_target_descriptor_find_by_id(
+    const char *id,
+    const ff_target_descriptor_t **descriptor);
+
 #endif /* FF_TARGET_DB_H */

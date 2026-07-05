@@ -2,7 +2,7 @@
 
 The firmware is an ESP-IDF scaffold with two application variants sharing
 common status/result primitives, product-wide build limits, target descriptor
-contracts, and a board-profile component.
+contracts and lookup helpers, and a board-profile component.
 
 | Path | Role |
 | --- | --- |
@@ -10,15 +10,15 @@ contracts, and a board-profile component.
 | `apps/desktop/` | ESP-IDF project for the benchtop station variant |
 | `components/common/` | Shared status and result primitives |
 | `components/config/` | Product-wide build limits shared by both app variants |
-| `components/target_db/` | Target family, protocol, and descriptor contracts |
+| `components/target_db/` | Target descriptor contracts, storage, and lookup helpers |
 | `components/board/` | Active board identity and capability contract |
 | `sdkconfig.defaults.common` | Configuration shared by both apps |
 
 Each app has its own `main/`, partition table, and `sdkconfig.defaults`. Both
 apps reference `firmware/components/` through `EXTRA_COMPONENT_DIRS`; the
 shared component tree contains common firmware primitives, product-wide build
-limits, target descriptor contracts, and the `board` component used by both
-apps.
+limits, target descriptor contracts and lookup helpers, and the `board`
+component used by both apps.
 
 ## Building
 
