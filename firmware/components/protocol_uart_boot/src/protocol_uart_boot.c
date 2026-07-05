@@ -40,6 +40,28 @@ static ff_status_t append_byte(uint8_t value,
     return FF_STATUS_OK;
 }
 
+static void frame_accumulator_clear(
+    ff_uart_boot_frame_accumulator_t *accumulator)
+{
+    accumulator->frame_bytes = 0U;
+    accumulator->in_frame = false;
+    accumulator->escaping = false;
+}
+
+static ff_status_t frame_accumulator_append(
+    ff_uart_boot_frame_accumulator_t *accumulator,
+    uint8_t value)
+{
+    if (accumulator->frame_bytes >= accumulator->capacity) {
+        frame_accumulator_clear(accumulator);
+        return FF_STATUS_NO_MEMORY;
+    }
+
+    accumulator->frame[accumulator->frame_bytes] = value;
+    ++accumulator->frame_bytes;
+    return FF_STATUS_OK;
+}
+
 static void write_u16_le(uint16_t value, uint8_t *output)
 {
     output[0] = (uint8_t)(value & 0xFFU);
@@ -197,6 +219,91 @@ ff_status_t ff_uart_boot_slip_decode(const uint8_t *input,
     }
 
     return FF_STATUS_OK;
+}
+
+ff_status_t ff_uart_boot_frame_accumulator_init(
+    ff_uart_boot_frame_accumulator_t *accumulator,
+    uint8_t *frame,
+    size_t frame_capacity)
+{
+    if (accumulator == NULL || frame == NULL || frame_capacity == 0U) {
+        return FF_STATUS_INVALID_ARGUMENT;
+    }
+
+    accumulator->frame = frame;
+    accumulator->capacity = frame_capacity;
+    frame_accumulator_clear(accumulator);
+    return FF_STATUS_OK;
+}
+
+ff_status_t ff_uart_boot_frame_accumulator_reset(
+    ff_uart_boot_frame_accumulator_t *accumulator)
+{
+    if (accumulator == NULL || accumulator->frame == NULL) {
+        return FF_STATUS_INVALID_ARGUMENT;
+    }
+
+    frame_accumulator_clear(accumulator);
+    return FF_STATUS_OK;
+}
+
+ff_status_t ff_uart_boot_frame_accumulator_push(
+    ff_uart_boot_frame_accumulator_t *accumulator,
+    uint8_t byte,
+    bool *frame_ready,
+    size_t *frame_bytes)
+{
+    if (accumulator == NULL ||
+        accumulator->frame == NULL ||
+        accumulator->capacity == 0U ||
+        frame_ready == NULL ||
+        frame_bytes == NULL) {
+        return FF_STATUS_INVALID_ARGUMENT;
+    }
+
+    *frame_ready = false;
+    *frame_bytes = 0U;
+
+    if (byte == FF_UART_BOOT_SLIP_END) {
+        if (!accumulator->in_frame) {
+            accumulator->in_frame = true;
+            accumulator->escaping = false;
+            accumulator->frame_bytes = 0U;
+            return FF_STATUS_OK;
+        }
+
+        if (accumulator->escaping) {
+            frame_accumulator_clear(accumulator);
+            return FF_STATUS_CHECK_FAILED;
+        }
+
+        accumulator->in_frame = false;
+        *frame_ready = true;
+        *frame_bytes = accumulator->frame_bytes;
+        return FF_STATUS_OK;
+    }
+
+    if (!accumulator->in_frame) {
+        return FF_STATUS_OK;
+    }
+
+    if (accumulator->escaping) {
+        accumulator->escaping = false;
+
+        if (byte == FF_UART_BOOT_SLIP_ESC_END) {
+            byte = FF_UART_BOOT_SLIP_END;
+        } else if (byte == FF_UART_BOOT_SLIP_ESC_ESC) {
+            byte = FF_UART_BOOT_SLIP_ESC;
+        } else {
+            frame_accumulator_clear(accumulator);
+            return FF_STATUS_CHECK_FAILED;
+        }
+    } else if (byte == FF_UART_BOOT_SLIP_ESC) {
+        accumulator->escaping = true;
+        return FF_STATUS_OK;
+    }
+
+    return frame_accumulator_append(accumulator, byte);
 }
 
 ff_status_t ff_uart_boot_build_command(ff_uart_boot_command_t command,
