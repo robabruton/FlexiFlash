@@ -209,6 +209,54 @@ static void test_build_command(void)
                   "command build rejects missing payload");
 }
 
+static void test_build_sync_command(void)
+{
+    uint8_t output[FF_UART_BOOT_COMMAND_HEADER_BYTES +
+                   FF_UART_BOOT_SYNC_PAYLOAD_BYTES] = {0};
+    size_t output_bytes = 0U;
+
+    expect_status(ff_uart_boot_build_sync_command(output,
+                                                  sizeof(output),
+                                                  &output_bytes),
+                  FF_STATUS_OK,
+                  "sync command build succeeds");
+    expect_true(output_bytes == sizeof(output),
+                "sync command reports frame size");
+    expect_true(output[0] == FF_UART_BOOT_FRAME_DIRECTION_COMMAND,
+                "sync command frame direction is command");
+    expect_true(output[1] == FF_UART_BOOT_COMMAND_SYNC,
+                "sync command stores operation");
+    expect_true(output[2] == FF_UART_BOOT_SYNC_PAYLOAD_BYTES &&
+                    output[3] == 0U,
+                "sync command stores payload length");
+    expect_true(output[4] == 0xDDU &&
+                    output[5] == 0U &&
+                    output[6] == 0U &&
+                    output[7] == 0U,
+                "sync command stores payload checksum");
+    expect_true(output[FF_UART_BOOT_COMMAND_HEADER_BYTES] == 0x07U &&
+                    output[FF_UART_BOOT_COMMAND_HEADER_BYTES + 1U] == 0x07U &&
+                    output[FF_UART_BOOT_COMMAND_HEADER_BYTES + 2U] == 0x12U &&
+                    output[FF_UART_BOOT_COMMAND_HEADER_BYTES + 3U] == 0x20U,
+                "sync command stores payload prefix");
+
+    for (size_t i = 4U; i < FF_UART_BOOT_SYNC_PAYLOAD_BYTES; ++i) {
+        expect_true(output[FF_UART_BOOT_COMMAND_HEADER_BYTES + i] == 0x55U,
+                    "sync command stores payload fill bytes");
+    }
+
+    expect_status(ff_uart_boot_build_sync_command(output,
+                                                  sizeof(output) - 1U,
+                                                  &output_bytes),
+                  FF_STATUS_NO_MEMORY,
+                  "sync command reports small output");
+    expect_status(ff_uart_boot_build_sync_command(NULL,
+                                                  sizeof(output),
+                                                  &output_bytes),
+                  FF_STATUS_INVALID_ARGUMENT,
+                  "sync command rejects missing output");
+}
+
 static void test_parse_response(void)
 {
     const uint8_t frame[] = {
@@ -346,6 +394,7 @@ int main(void)
     test_slip_encode();
     test_slip_decode();
     test_build_command();
+    test_build_sync_command();
     test_parse_response();
     test_response_status();
 
