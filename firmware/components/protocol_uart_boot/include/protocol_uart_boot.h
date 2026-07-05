@@ -74,6 +74,13 @@ typedef struct {
 } ff_uart_boot_frame_accumulator_t;
 
 /**
+ * @brief Streaming ESP UART bootloader response reader.
+ */
+typedef struct {
+    ff_uart_boot_frame_accumulator_t accumulator; /**< Decoded frame state. */
+} ff_uart_boot_response_reader_t;
+
+/**
  * @brief Calculates the bootloader checksum for command payload bytes.
  *
  * @param[in] payload Payload bytes to checksum, or NULL for an empty payload.
@@ -163,6 +170,51 @@ ff_status_t ff_uart_boot_frame_accumulator_push(
     uint8_t byte,
     bool *frame_ready,
     size_t *frame_bytes);
+
+/**
+ * @brief Initializes a streaming bootloader response reader.
+ *
+ * @param[out] reader Response reader state to initialize.
+ * @param[out] frame Caller-owned storage for decoded frame bytes.
+ * @param[in] frame_capacity Decoded frame storage capacity in bytes.
+ *
+ * @return FF_STATUS_OK when initialization succeeds; otherwise an argument
+ *         validation status.
+ */
+ff_status_t ff_uart_boot_response_reader_init(
+    ff_uart_boot_response_reader_t *reader,
+    uint8_t *frame,
+    size_t frame_capacity);
+
+/**
+ * @brief Clears buffered bytes and receive state from a response reader.
+ *
+ * @param[in,out] reader Response reader state to clear.
+ *
+ * @return FF_STATUS_OK when the reader is valid; otherwise an argument
+ *         validation status.
+ */
+ff_status_t ff_uart_boot_response_reader_reset(
+    ff_uart_boot_response_reader_t *reader);
+
+/**
+ * @brief Adds one transport byte to a streaming response reader.
+ *
+ * @param[in,out] reader Reader receiving encoded response bytes.
+ * @param[in] byte Transport byte read from the serial stream.
+ * @param[out] response_ready Receives true when a response is complete.
+ * @param[out] response Receives the parsed response when ready.
+ *
+ * @return FF_STATUS_OK when the byte is accepted; FF_STATUS_NO_MEMORY when the
+ *         decoded frame storage is full; FF_STATUS_CHECK_FAILED when the stream
+ *         or decoded response is malformed; otherwise an argument validation
+ *         status.
+ */
+ff_status_t ff_uart_boot_response_reader_push(
+    ff_uart_boot_response_reader_t *reader,
+    uint8_t byte,
+    bool *response_ready,
+    ff_uart_boot_response_t *response);
 
 /**
  * @brief Builds an unescaped command frame.
