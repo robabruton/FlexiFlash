@@ -6,6 +6,7 @@
 #ifndef FF_PROTOCOL_UART_BOOT_H
 #define FF_PROTOCOL_UART_BOOT_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -62,6 +63,17 @@ typedef struct {
 } ff_uart_boot_response_t;
 
 /**
+ * @brief Streaming SLIP packet accumulator for transport receive paths.
+ */
+typedef struct {
+    uint8_t *frame;      /**< Caller-owned decoded frame storage. */
+    size_t capacity;     /**< Decoded frame storage capacity in bytes. */
+    size_t frame_bytes;  /**< Number of decoded bytes currently stored. */
+    bool in_frame;       /**< True while bytes are inside SLIP delimiters. */
+    bool escaping;       /**< True after an escape marker inside a frame. */
+} ff_uart_boot_frame_accumulator_t;
+
+/**
  * @brief Calculates the bootloader checksum for command payload bytes.
  *
  * @param[in] payload Payload bytes to checksum, or NULL for an empty payload.
@@ -107,6 +119,50 @@ ff_status_t ff_uart_boot_slip_decode(const uint8_t *input,
                                      uint8_t *output,
                                      size_t output_capacity,
                                      size_t *output_bytes);
+
+/**
+ * @brief Initializes a streaming SLIP frame accumulator.
+ *
+ * @param[out] accumulator Accumulator state to initialize.
+ * @param[out] frame Caller-owned storage for decoded frame bytes.
+ * @param[in] frame_capacity Decoded frame storage capacity in bytes.
+ *
+ * @return FF_STATUS_OK when initialization succeeds; otherwise an argument
+ *         validation status.
+ */
+ff_status_t ff_uart_boot_frame_accumulator_init(
+    ff_uart_boot_frame_accumulator_t *accumulator,
+    uint8_t *frame,
+    size_t frame_capacity);
+
+/**
+ * @brief Clears buffered bytes and receive state from an accumulator.
+ *
+ * @param[in,out] accumulator Accumulator state to clear.
+ *
+ * @return FF_STATUS_OK when the accumulator is valid; otherwise an argument
+ *         validation status.
+ */
+ff_status_t ff_uart_boot_frame_accumulator_reset(
+    ff_uart_boot_frame_accumulator_t *accumulator);
+
+/**
+ * @brief Adds one transport byte to a streaming SLIP frame accumulator.
+ *
+ * @param[in,out] accumulator Accumulator receiving decoded frame bytes.
+ * @param[in] byte Transport byte read from the serial stream.
+ * @param[out] frame_ready Receives true when a decoded frame is complete.
+ * @param[out] frame_bytes Receives the decoded frame byte count.
+ *
+ * @return FF_STATUS_OK when the byte is accepted; FF_STATUS_NO_MEMORY when the
+ *         decoded frame storage is full; FF_STATUS_CHECK_FAILED when the SLIP
+ *         stream is malformed; otherwise an argument validation status.
+ */
+ff_status_t ff_uart_boot_frame_accumulator_push(
+    ff_uart_boot_frame_accumulator_t *accumulator,
+    uint8_t byte,
+    bool *frame_ready,
+    size_t *frame_bytes);
 
 /**
  * @brief Builds an unescaped command frame.

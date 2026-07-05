@@ -32,6 +32,29 @@ static void expect_status(ff_status_t actual,
     }
 }
 
+static void expect_accumulator_push(
+    ff_uart_boot_frame_accumulator_t *accumulator,
+    uint8_t byte,
+    ff_status_t expected_status,
+    bool expected_ready,
+    size_t expected_frame_bytes,
+    const char *message)
+{
+    bool frame_ready = true;
+    size_t frame_bytes = 0xFFFFU;
+    ff_status_t status =
+        ff_uart_boot_frame_accumulator_push(accumulator,
+                                            byte,
+                                            &frame_ready,
+                                            &frame_bytes);
+
+    expect_status(status, expected_status, message);
+    expect_true(frame_ready == expected_ready,
+                "accumulator frame-ready flag matches expectation");
+    expect_true(frame_bytes == expected_frame_bytes,
+                "accumulator frame byte count matches expectation");
+}
+
 static void test_checksum(void)
 {
     const uint8_t payload[] = {0x01U, 0x02U};
@@ -168,6 +191,203 @@ static void test_slip_decode(void)
                                  &output_bytes),
         FF_STATUS_CHECK_FAILED,
         "SLIP decode rejects invalid escape");
+}
+
+static void test_frame_accumulator_init_reset(void)
+{
+    uint8_t frame[4] = {0};
+    ff_uart_boot_frame_accumulator_t accumulator = {0};
+
+    expect_status(
+        ff_uart_boot_frame_accumulator_init(&accumulator,
+                                            frame,
+                                            sizeof(frame)),
+        FF_STATUS_OK,
+        "accumulator init succeeds");
+    expect_true(accumulator.frame == frame,
+                "accumulator stores caller frame buffer");
+    expect_true(accumulator.capacity == sizeof(frame),
+                "accumulator stores caller frame capacity");
+    expect_true(accumulator.frame_bytes == 0U,
+                "accumulator starts with no decoded bytes");
+    expect_true(!accumulator.in_frame && !accumulator.escaping,
+                "accumulator starts outside a frame");
+
+    accumulator.frame_bytes = 2U;
+    accumulator.in_frame = true;
+    accumulator.escaping = true;
+    expect_status(
+        ff_uart_boot_frame_accumulator_reset(&accumulator),
+        FF_STATUS_OK,
+        "accumulator reset succeeds");
+    expect_true(accumulator.frame_bytes == 0U,
+                "accumulator reset clears decoded bytes");
+    expect_true(!accumulator.in_frame && !accumulator.escaping,
+                "accumulator reset clears receive state");
+
+    expect_status(
+        ff_uart_boot_frame_accumulator_init(NULL,
+                                            frame,
+                                            sizeof(frame)),
+        FF_STATUS_INVALID_ARGUMENT,
+        "accumulator init rejects missing state");
+    expect_status(
+        ff_uart_boot_frame_accumulator_init(&accumulator, NULL, sizeof(frame)),
+        FF_STATUS_INVALID_ARGUMENT,
+        "accumulator init rejects missing frame buffer");
+    expect_status(
+        ff_uart_boot_frame_accumulator_init(&accumulator, frame, 0U),
+        FF_STATUS_INVALID_ARGUMENT,
+        "accumulator init rejects empty frame buffer");
+    expect_status(
+        ff_uart_boot_frame_accumulator_reset(NULL),
+        FF_STATUS_INVALID_ARGUMENT,
+        "accumulator reset rejects missing state");
+}
+
+static void test_frame_accumulator_packet(void)
+{
+    uint8_t frame[4] = {0};
+    ff_uart_boot_frame_accumulator_t accumulator = {0};
+
+    expect_status(
+        ff_uart_boot_frame_accumulator_init(&accumulator,
+                                            frame,
+                                            sizeof(frame)),
+        FF_STATUS_OK,
+        "accumulator init succeeds for packet test");
+
+    expect_accumulator_push(&accumulator,
+                            0x99U,
+                            FF_STATUS_OK,
+                            false,
+                            0U,
+                            "accumulator ignores pre-frame bytes");
+    expect_accumulator_push(&accumulator,
+                            FF_UART_BOOT_SLIP_END,
+                            FF_STATUS_OK,
+                            false,
+                            0U,
+                            "accumulator starts on delimiter");
+    expect_accumulator_push(&accumulator,
+                            0x01U,
+                            FF_STATUS_OK,
+                            false,
+                            0U,
+                            "accumulator stores raw frame byte");
+    expect_accumulator_push(&accumulator,
+                            FF_UART_BOOT_SLIP_ESC,
+                            FF_STATUS_OK,
+                            false,
+                            0U,
+                            "accumulator starts escape sequence");
+    expect_accumulator_push(&accumulator,
+                            FF_UART_BOOT_SLIP_ESC_END,
+                            FF_STATUS_OK,
+                            false,
+                            0U,
+                            "accumulator decodes escaped delimiter");
+    expect_accumulator_push(&accumulator,
+                            FF_UART_BOOT_SLIP_ESC,
+                            FF_STATUS_OK,
+                            false,
+                            0U,
+                            "accumulator starts second escape sequence");
+    expect_accumulator_push(&accumulator,
+                            FF_UART_BOOT_SLIP_ESC_ESC,
+                            FF_STATUS_OK,
+                            false,
+                            0U,
+                            "accumulator decodes escaped escape byte");
+    expect_accumulator_push(&accumulator,
+                            FF_UART_BOOT_SLIP_END,
+                            FF_STATUS_OK,
+                            true,
+                            3U,
+                            "accumulator reports complete frame");
+
+    expect_true(frame[0] == 0x01U &&
+                    frame[1] == FF_UART_BOOT_SLIP_END &&
+                    frame[2] == FF_UART_BOOT_SLIP_ESC,
+                "accumulator stores decoded frame bytes");
+}
+
+static void test_frame_accumulator_errors(void)
+{
+    uint8_t frame[2] = {0};
+    ff_uart_boot_frame_accumulator_t accumulator = {0};
+
+    expect_status(
+        ff_uart_boot_frame_accumulator_init(&accumulator,
+                                            frame,
+                                            sizeof(frame)),
+        FF_STATUS_OK,
+        "accumulator init succeeds for error test");
+
+    expect_accumulator_push(&accumulator,
+                            FF_UART_BOOT_SLIP_END,
+                            FF_STATUS_OK,
+                            false,
+                            0U,
+                            "accumulator starts malformed frame");
+    expect_accumulator_push(&accumulator,
+                            FF_UART_BOOT_SLIP_ESC,
+                            FF_STATUS_OK,
+                            false,
+                            0U,
+                            "accumulator records pending escape");
+    expect_accumulator_push(&accumulator,
+                            0x00U,
+                            FF_STATUS_CHECK_FAILED,
+                            false,
+                            0U,
+                            "accumulator rejects malformed escape");
+    expect_true(!accumulator.in_frame && !accumulator.escaping,
+                "accumulator clears state after malformed escape");
+
+    expect_accumulator_push(&accumulator,
+                            FF_UART_BOOT_SLIP_END,
+                            FF_STATUS_OK,
+                            false,
+                            0U,
+                            "accumulator restarts after malformed escape");
+    expect_accumulator_push(&accumulator,
+                            0x11U,
+                            FF_STATUS_OK,
+                            false,
+                            0U,
+                            "accumulator stores first capacity byte");
+    expect_accumulator_push(&accumulator,
+                            0x22U,
+                            FF_STATUS_OK,
+                            false,
+                            0U,
+                            "accumulator stores second capacity byte");
+    expect_accumulator_push(&accumulator,
+                            0x33U,
+                            FF_STATUS_NO_MEMORY,
+                            false,
+                            0U,
+                            "accumulator rejects oversized frame");
+    expect_true(!accumulator.in_frame && accumulator.frame_bytes == 0U,
+                "accumulator clears state after oversized frame");
+
+    bool frame_ready = false;
+    size_t frame_bytes = 0U;
+    expect_status(
+        ff_uart_boot_frame_accumulator_push(&accumulator,
+                                            FF_UART_BOOT_SLIP_END,
+                                            NULL,
+                                            &frame_bytes),
+        FF_STATUS_INVALID_ARGUMENT,
+        "accumulator push rejects missing ready output");
+    expect_status(
+        ff_uart_boot_frame_accumulator_push(&accumulator,
+                                            FF_UART_BOOT_SLIP_END,
+                                            &frame_ready,
+                                            NULL),
+        FF_STATUS_INVALID_ARGUMENT,
+        "accumulator push rejects missing byte count output");
 }
 
 static void test_build_command(void)
@@ -498,6 +718,9 @@ int main(void)
     test_checksum();
     test_slip_encode();
     test_slip_decode();
+    test_frame_accumulator_init_reset();
+    test_frame_accumulator_packet();
+    test_frame_accumulator_errors();
     test_build_command();
     test_build_sync_command();
     test_parse_response();
