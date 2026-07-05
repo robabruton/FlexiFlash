@@ -426,6 +426,69 @@ ff_status_t ff_uart_boot_build_sync_command(uint8_t *output,
                                       output_bytes);
 }
 
+ff_status_t ff_uart_boot_build_sync_packet(uint8_t *output,
+                                           size_t output_capacity,
+                                           size_t *output_bytes)
+{
+    if (output == NULL || output_bytes == NULL) {
+        return FF_STATUS_INVALID_ARGUMENT;
+    }
+
+    uint8_t command[FF_UART_BOOT_SYNC_COMMAND_BYTES] = {0};
+    size_t command_bytes = 0U;
+    ff_status_t status =
+        ff_uart_boot_build_sync_command(command,
+                                        sizeof(command),
+                                        &command_bytes);
+    if (status != FF_STATUS_OK) {
+        *output_bytes = 0U;
+        return status;
+    }
+
+    return ff_uart_boot_slip_encode(command,
+                                    command_bytes,
+                                    output,
+                                    output_capacity,
+                                    output_bytes);
+}
+
+ff_status_t ff_uart_boot_sync_exchange_push(
+    ff_uart_boot_response_reader_t *reader,
+    uint8_t byte,
+    bool *sync_ready,
+    uint32_t *value)
+{
+    if (reader == NULL || sync_ready == NULL) {
+        return FF_STATUS_INVALID_ARGUMENT;
+    }
+
+    *sync_ready = false;
+
+    bool response_ready = false;
+    ff_uart_boot_response_t response = {0};
+    ff_status_t status =
+        ff_uart_boot_response_reader_push(reader,
+                                          byte,
+                                          &response_ready,
+                                          &response);
+    if (status != FF_STATUS_OK) {
+        return status;
+    }
+
+    if (!response_ready) {
+        return FF_STATUS_OK;
+    }
+
+    status = ff_uart_boot_validate_sync_response(&response, value);
+    if (status != FF_STATUS_OK) {
+        (void)ff_uart_boot_response_reader_reset(reader);
+        return status;
+    }
+
+    *sync_ready = true;
+    return FF_STATUS_OK;
+}
+
 ff_status_t ff_uart_boot_parse_response(const uint8_t *frame,
                                         size_t frame_bytes,
                                         ff_uart_boot_response_t *response)
